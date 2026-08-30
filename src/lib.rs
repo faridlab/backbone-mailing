@@ -70,6 +70,9 @@ pub struct MailingModule {
     pub(crate) mailing_trace_service: Arc<MailingTraceService>,
     pub(crate) mailing_filter_service: Arc<MailingFilterService>,
     // <<< CUSTOM FIELDS
+    pub(crate) trace_clicks: crate::application::service::trace_click_ports::TraceClickSlot,
+    pub(crate) trace_route_service:
+        std::sync::Arc<crate::application::service::trace_route_service::TraceRouteService>,
     // END CUSTOM
 }
 
@@ -146,6 +149,26 @@ impl MailingModule {
     }
 
     // <<< CUSTOM METHODS
+    /// Compose the short-link click seam for the public trace-route family
+    /// (deny-by-default until called — the PhoneBookPort shape): the ONE
+    /// registered implementation answers code attribution + click minting
+    /// by wrapping the short-link module's public seams.
+    pub fn set_trace_click_port(
+        &self,
+        port: std::sync::Arc<dyn crate::application::service::trace_click_ports::TraceClickPort>,
+    ) {
+        self.trace_clicks.install(port);
+    }
+
+    /// The public `/r/:code/m/:trace` trace-route family (click + open
+    /// pixel + unsubscribe): a BARE capability mount throttled 120/min per
+    /// code — merge at the site ROOT, next to the short-link module's own
+    /// `/r/:code` group (distinct path shapes; no shadowing).
+    pub fn public_trace_routes(&self) -> Router {
+        crate::presentation::http::trace_routes::public_composer(
+            self.trace_route_service.clone(),
+        )
+    }
     // END CUSTOM
 }
 
@@ -209,6 +232,14 @@ impl MailingModuleBuilder {
         let mailing_filter_service = Arc::new(MailingFilterService::with_repository(mailing_filter_repository.clone()));
 
         // <<< CUSTOM
+        let trace_clicks =
+            crate::application::service::trace_click_ports::TraceClickSlot::default();
+        let trace_route_service = std::sync::Arc::new(
+            crate::application::service::trace_route_service::TraceRouteService::new(
+                db_pool.clone(),
+                trace_clicks.clone(),
+            ),
+        );
         // END CUSTOM
 
         Ok(MailingModule {
@@ -221,6 +252,8 @@ impl MailingModuleBuilder {
             mailing_trace_service,
             mailing_filter_service,
             // <<< CUSTOM
+            trace_clicks,
+            trace_route_service,
             // END CUSTOM
         })
     }

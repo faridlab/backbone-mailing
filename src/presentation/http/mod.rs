@@ -15,6 +15,7 @@ pub mod mailing_trace_handler;
 pub mod mailing_filter_handler;
 
 // <<< CUSTOM
+pub mod trace_routes;
 // END CUSTOM
 
 // Re-exports
@@ -27,4 +28,5 @@ pub use mailing_handler::{create_mailing_routes, create_mailing_read_routes, cre
 pub use mailing_trace_handler::{create_mailing_trace_routes, create_mailing_trace_read_routes, create_mailing_trace_write_routes};
 pub use mailing_filter_handler::{create_mailing_filter_routes, create_mailing_filter_read_routes, create_mailing_filter_write_routes};
 // <<< CUSTOM
+pub use trace_routes::{public_composer, public_trace_routes};
 // END CUSTOM

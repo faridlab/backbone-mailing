@@ -1,0 +1,52 @@
+# Codegen policy for mailing.
+#
+# `user_owned` globs are hand-written files that live inside generator-owned trees but are
+# NOT schema-derived. `metaphor schema generate [--force]` skips them wholesale (never reads,
+# merges, or deletes them). Everything else in src/ is regenerated from schema/models.
+#
+# Re-exports/declarations that must sit alongside generated code live inside
+# `// <<< CUSTOM ... // END CUSTOM` markers (service/mod.rs, presentation/http/mod.rs, lib.rs)
+# and are preserved by the marker mechanism, not listed here.
+#
+# Declared BEFORE any file lands (the regen-safety contract).
+
+user_owned:
+  # Hand-authored validated write paths (services orchestrate, repositories
+  # hold SQL — the module rule): the mailing lifecycle + send engine verbs,
+  # the trace set_* verbs, and the grouped-query stats read service.
+  #
+  # The generated per-entity repositories (src/infrastructure/persistence/
+  # mailing_repository.rs, mailing_trace_repository.rs) are generator-owned
+  # until a seat customizes them: add the matching user_owned entry BEFORE
+  # the regen that precedes the customization, or the file gets clobbered.
+  - "src/application/service/mailing_write_service.rs"
+  - "src/application/service/trace_write_service.rs"
+  - "src/application/service/mailing_stats_read_service.rs"
+  - "src/application/service/subscription_write_service.rs"
+  - "src/application/service/ab_test_write_service.rs"
+
+  # Hand-authored SQL holders for the write paths above (separate files, the
+  # engagement house pattern — the generated per-entity repositories stay
+  # untouched): send-engine claim/suppress/resolve/complete SQL, the trace
+  # set_* conditional updates, and the subscription opt-out split.
+  - "src/infrastructure/persistence/mailing_send_repository.rs"
+  - "src/infrastructure/persistence/trace_repository.rs"
+  - "src/infrastructure/persistence/subscription_repository.rs"
+
+  # Hand-written DB hardening: the G-MM1 percentage-band CHECK, the G-MM2
+  # email_from CHECK, and any further unique/monotonic-guard constraints the
+  # DSL cannot express.
+  - "migrations/*mailing*hardening*"
+
+  # Behavior tests (the golden cases / oracle) + the concurrency proofs.
+  - "tests/features/**"
+  - "tests/mailing_cases.rs"
+  - "tests/trace_cases.rs"
+  - "tests/subscription_cases.rs"
+  - "tests/ab_seed_cases.rs"
+  - "tests/send_probe_cases.rs"
+  - "tests/behavior/**"
+
+  # Hand-authored module documentation.
+  - "docs/**"
+  - "README.md"

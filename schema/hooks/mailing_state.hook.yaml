@@ -1,0 +1,56 @@
+# =============================================================================
+# mailing_state — Mailing.state (machine #1; ADR-0016 hand_set). Split into
+#   its own per-entity hook file because the validator resolves a field's
+#   `state_machine:` ref against per-entity hook names.
+#
+# HAND-SET lifecycle: launch/cancel/retry_failed are operator verbs; the
+# send cron moves the SAME edges THROUGH these transitions, never via raw
+# state writes. THE RAW-ATTRIBUTE FLIP UPSTREAM'S CRON DID (setting
+# state='sending' directly, bypassing every guard) DOES NOT PORT: the
+# in_queue→sending edge is the pickup verb — a typed conditional UPDATE
+# inside the FOR UPDATE SKIP LOCKED claim transaction (only in_queue rows
+# move; two concurrent sweeps claim disjoint mailings; a crash mid-claim
+# leaves no phantom because the flip rides the claim's transaction).
+# Behavior spec lives in the typed verbs (the write service) — this file
+# is the declaration.
+# =============================================================================
+
+name: mailing_state
+model: Mailing
+
+states:
+  field: state
+  values:
+    draft:
+      initial: true
+    in_queue:
+      {}
+    sending:
+      {}
+    done:
+      final: true   # a resting state, not a dead end — retry_failed still exits it
+  transitions:
+    launch:
+      from: draft
+      to: in_queue
+      message: "Mailing armed — stages the MailingQueuedForSend arming event; schedule_type='immediate' clears schedule_date in the same verb"
+    pickup:
+      from: in_queue
+      to: sending
+      message: "The send cron's claim — a state-guarded conditional UPDATE ... WHERE state='in_queue' AND (schedule_date IS NULL OR schedule_date <= now()) inside FOR UPDATE SKIP LOCKED; concurrent sweeps claim disjoint mailings, and the (mailing, recipient) unique is the mint fence under the lock"
+    complete:
+      from: sending
+      to: done
+      message: "All recipient mail rows enqueued + traces minted — stamps sent_date and sets kpi_mail_required on first send"
+    complete_empty:
+      from: in_queue
+      to: done
+      message: "Zero recipients resolved (the claim's shortcut edge) — stamps sent_date; no traces, no mail rows"
+    cancel:
+      from: [in_queue, sending, done]
+      to: draft
+      message: "Back to draft — clears schedule_date and resets schedule_type='immediate'; traces are KEPT for audit (there is no canceled state value)"
+    retry_failed:
+      from: done
+      to: in_queue
+      message: "Re-queues only the error traces' recipients (suppression-cancel traces are never retried)"

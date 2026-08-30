@@ -1,0 +1,17 @@
+# Seed Execution Order Configuration
+# Seeds are executed in the order defined in this file.
+# This ensures foreign key dependencies are satisfied.
+
+# Format: seed_name_seed (without .sql extension)
+#
+# Note: You can manually edit this file to customize the order.
+# Seeds not listed here will be executed after in alphabetical order.
+
+- mailing_ab_test_seed
+- mailing_audience_seed
+- mailing_contact_seed
+- mailing_subscription_seed
+- opt_out_reason_seed
+- mailing_seed
+- mailing_trace_seed
+- mailing_filter_seed

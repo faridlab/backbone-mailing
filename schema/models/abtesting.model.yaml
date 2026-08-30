@@ -1,0 +1,89 @@
+# =============================================================================
+# mailing — the campaign-grain A/B control (the mass_mailing A/B machinery,
+#   re-homed MAILING-LOCAL per the chair design call). Upstream hosted these
+#   fields on utm.campaign by inheritance; the port keeps engagement's
+#   EngagementCampaign as the pure attribution master (no engagement release
+#   for this feature) and puts the A/B machine's moving parts where they
+#   live: fragments ARE Mailings, the winner IS a Mailing, and the sampling
+#   seed guards THIS module's send engine.
+#
+# PORT DECISIONS:
+#  - ONE live test per campaign: UNIQUE(campaign_id) among live rows fences
+#    the cross-module consistency risk the re-homing creates (engagement
+#    knows nothing about A/B; the invariant is enforced here).
+#  - sampling_seed is minted ONCE at creation (random 128-bit, hex) and
+#    NEVER regenerated: fragment membership is DETERMINISTIC —
+#    member iff HMAC-SHA256(seed, recipient_email) mod 100 < ab_testing_pc
+#    (each sibling fragments its own share keyed by its mailing id salt).
+#    Stable across restarts, identical across concurrent workers, disjoint
+#    across siblings — the upstream random.sample re-sampling class closes
+#    by construction.
+#  - completed is a FLAG driven by the promotion step (winner promotion
+#    stamps winner_mailing_id + completed together), NOT a state machine;
+#    promotion is idempotent (keyed on completed + winner_mailing_id).
+#  - Upstream's DORMANT second cron (the daily A/B winner promotion job) is
+#    NOT ported as its own cron: winner auto-promotion is an ordered,
+#    idempotent step inside the ONE send sweep (schema/hooks/index.hook.yaml).
+# =============================================================================
+
+models:
+
+  - name: MailingAbTest
+    collection: mailing_ab_tests
+    description: "The campaign-grain A/B control — one live test per campaign (UNIQUE among live rows), carrying the persisted deterministic sampling seed, the winner-selection metric, and the promotion state. Fragment fields live on each sibling Mailing; the winner is promoted as a NEW Mailing at 100% citing the same campaign. Winner auto-promotion rides the single send cron as an idempotent step (upstream's dormant second cron does not port)."
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique record id"
+      campaign_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(engagement.EngagementCampaign.id)", "@exclude_from_foreign_key_check", "@indexed"]
+        description: "The campaign under test # logical FK engagement.EngagementCampaign.id — ONE live test per campaign (partial UNIQUE; the v19 collapse holds — engagement stays the attribution master and ships no A/B fields)."
+      winner_selection:
+        type: AbWinnerSelection
+        attributes: ["@required", "@default(opened_ratio)"]
+        description: "The metric the promotion step ranks done siblings by (manual defers to the operator verb)."
+      promote_at:
+        type: datetime?
+        description: "Earliest auto-promotion time — the sweep's promotion step picks tests past this stamp with at least one done sibling."
+      completed:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "Terminal FLAG (not a machine): stamped together with winner_mailing_id by the promotion step/verb — promotion is idempotent (re-runs no-op once completed)."
+      winner_mailing_id:
+        type: uuid?
+        attributes: ["@foreign_key(Mailing.winner_of)", "@exclude_from_foreign_key_check"]
+        description: "The promoted winner # logical FK Mailing.id — the copy at ab_testing_pc=100 citing the same campaign. Setting it marks the test completed."
+      sampling_seed:
+        type: string
+        attributes: ["@required", "@max(64)"]
+        description: "Minted ONCE at creation (random 128-bit hex), never regenerated — the deterministic-fragment key: member iff HMAC-SHA256(seed, recipient_email) mod 100 < the sibling's ab_testing_pc. Identical fragments across runs and workers; disjoint across siblings."
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: unique
+        fields: [campaign_id]
+        where: "deleted_at IS NULL"
+        description: "One live A/B test per campaign — the mailing-side fence for the re-homed invariant (fires on raw SQL)"
+
+# =============================================================================
+# Enums (A/B)
+# =============================================================================
+
+enums:
+  - name: AbWinnerSelection
+    description: "The winner-selection metric — the promotion step ranks done siblings by this key (manual defers to the operator)"
+    variants:
+      - name: manual
+        description: "An operator promotes explicitly (the promotion verb)"
+      - name: opened_ratio
+        description: "Highest opened ratio wins"
+        default: true
+      - name: clicks_ratio
+        description: "Highest clicks ratio wins (computed from trace links_click_datetime)"
+      - name: replied_ratio
+        description: "Highest replied ratio wins"

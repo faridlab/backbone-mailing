@@ -1,0 +1,107 @@
+# =============================================================================
+# mailing hooks — the write-path rules with enforcement loci (ADR-0015) and
+#   the lifecycle-none declarations for every stateless entity.
+#
+# Spec of behavior: the typed verbs in the mailing/trace write services
+# (src/application/service/, hand-authored) + the ONE send sweep. The
+# machines are DECLARATIONS — the transition verbs are the only writers of
+# state, including the cron's claim edge (never raw writes).
+#
+# The two hand-set machines (ADR-0016) live in their own per-entity hook
+# files, where the schema validator resolves a field's `state_machine:` ref:
+#   mailing_state.hook.yaml   Mailing.state (the send pipeline)
+#   trace_status.hook.yaml    MailingTrace.trace_status (per-recipient)
+#
+# Lifecycle declarations (ADR-0016 — silence must not read "nobody decided"):
+#   hand_set machines: Mailing.state (mailing_state),
+#                      MailingTrace.trace_status (trace_status) — the two
+#                      files above.
+#   hand_set, no machine: Mailing.schedule_type (the orthogonal pair's
+#                      driver; coupling lives in the launch/cancel verbs).
+#   split (driver named): MailingSubscription.opt_out_datetime
+#                      (driver opt_out — cleared when the driver is false,
+#                      stamped DB-now() when true; reason-set forces the
+#                      driver true).
+#   inert enums: Mailing.mailing_type, Mailing.target_model,
+#                      MailingTrace.trace_type, MailingFilter.target_model
+#                      (single-value / closed-vocabulary markers whose
+#                      consumers arrive with later overlays — declared so
+#                      no port invents semantics for them).
+#   lifecycle none: MailingAudience, MailingContact, OptOutReason,
+#                      MailingFilter (as a whole), MailingAbTest (completed
+#                      is a FLAG driven by the promotion step, not a
+#                      machine).
+# =============================================================================
+
+module: mailing
+version: 2
+
+rules:
+
+  # ---- mailing: bounds, guards, the send discipline --------------------------
+
+  - id: R-M1
+    name: ab_testing_pc_bounds
+    when: create, update mailing
+    assert: "ab_testing_pc BETWEEN 0 AND 100 (G-MM1 kept — the percentage must be a valid percent)"
+    error_code: ab_percentage_out_of_range
+    enforcement: db
+    # The strict 0..100 CHECK is installed by the hand-written hardening
+    # migration (the generic non-negative attribute cannot express the band).
+  - id: R-M2
+    name: email_from_required_for_mail
+    when: create, update mailing
+    assert: "email_from IS NOT NULL OR mailing_type <> 'mail' (G-MM2 kept — the sender guard upstream enforced at the DB, fires on raw SQL)"
+    error_code: email_from_required
+    enforcement: db
+    # Installed by the hand-written hardening migration so the CHECK survives
+    # raw SQL exactly as upstream's did (the future SMS channel is exempt).
+  - id: R-M3
+    name: trace_recipient_anchor_required
+    when: create trace
+    assert: "recipient_id IS NOT NULL (G-MM3/MMM-11 kept — traces are ALWAYS polymorphic, never orphan)"
+    error_code: trace_recipient_required
+    enforcement: db
+    # The @required column constraint IS the guard (NOT NULL fires on raw SQL).
+  - id: R-M4
+    name: subscription_unique_contact_list
+    when: create, update subscription
+    assert: "UNIQUE(contact_id, mailing_audience_id) among live rows (G-MM4/MMM-13 kept — the upstream composite unique; upserts converge instead of duplicating)"
+    error_code: duplicate_subscription
+    enforcement: db
+  - id: R-M5
+    name: trace_unique_mailing_recipient
+    when: mint trace
+    assert: "UNIQUE(mailing_id, recipient_id) among live non-canceled rows — the MINT FENCE upstream lacks: under the send claim's SKIP LOCKED even a lock regression mints at most one live trace per recipient per mailing; the loser's INSERT fails loudly and is logged, never silently duplicated. Canceled suppression traces sit outside the unique so re-targeting can mint fresh."
+    error_code: duplicate_live_trace
+    enforcement: db
+  - id: R-M6
+    name: domain_parses_or_refuses
+    when: create, update mailing or filter; send
+    assert: "the declarative domain DSL parses through the typed parser — Result<CompiledDomain, DomainInvalid>. Malformed input is a typed 422 at create/update; AT SEND the mailing is parked (state stays sending, error recorded on the row, zero recipients touched, zero mail rows minted) — NEVER a silent zero-recipient send (MMB-6 closed)"
+    error_code: domain_invalid
+    enforcement: service
+    # service-only justification: the parser is code over a typed json column;
+    # no row-level CHECK can express "this json parses".
+  - id: R-M7
+    name: list_archive_guard
+    when: update list
+    assert: "archiving (active=false) is refused while any mailing with state != done targets the audience (G-MM7 kept — cross-table, so the verb enforces)"
+    error_code: list_in_use
+    enforcement: service
+    # service-only justification: cross-table guard (mailings referencing the
+    # list) — not expressible as a row-level CHECK.
+  - id: R-M8
+    name: campaign_cleared_while_ab_testing_refused
+    when: update mailing
+    assert: "clearing campaign_id while ab_testing_enabled is refused (G-MM9 kept — an A/B mailing without its campaign would orphan the campaign-keyed dedup and the test row)"
+    error_code: campaign_required_for_ab_testing
+    enforcement: service
+    # service-only justification: conditional cross-field + cross-row guard
+    # (the ab test row and the seen-list both key off the campaign).
+
+triggers: []
+# (none — upstream's create/write side-effect ladder (cron arming via ORM
+#  writes, attachment re-parenting, inline-image conversion) does not port:
+#  arming is the launch verb's staged event, and rendering is host-side.
+#  The send sweep itself is the scheduled job declared in index.hook.yaml.)

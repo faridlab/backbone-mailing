@@ -1,0 +1,138 @@
+# =============================================================================
+# mailing Module - Schema Index
+# =============================================================================
+# Version: 2.0
+# Description: Module schema index. `module:` and `schema:` are stamped from
+# the module name by `metaphor module create`. `schema:` gives this module its
+# OWN Postgres schema (migrations emit `CREATE SCHEMA mailing` and qualify
+# tables as `mailing.<table>`) — the convention every backbone module
+# follows (see backbone-sapiens, backbone-bucket). Do not remove it.
+# =============================================================================
+
+module: mailing
+version: 2
+schema: mailing
+description: "mailing — the mass-mail engine: audiences (lists, contacts, the opt-out-carrying subscription through-rows), the hand-set mailing lifecycle (draft/in_queue/sending/done) drained by ONE daily send cron under a SKIP LOCKED claim, seeded deterministic A/B testing, and the per-recipient trace ledger (Odoo mass_mailing port)"
+
+# ADR-0014 company fence: the Odoo mass_mailing stack ships NO company column
+# and zero ir.rules (posture 4 — the ADR names the mass_mailing family
+# explicitly). Declaring `none` emits no company RLS migration; synthesizing
+# a fence would change behavior, not just enforcement (do-not-synthesize).
+# Tenant isolation (ADR-0006) remains the only fence; security is ACLs +
+# service-layer checks (guarded route compositions).
+company_fence: none
+
+config:
+  database: postgresql
+  soft_delete: true
+  audit: true
+  default_timestamps: true
+  generators:
+    disabled:
+      - graphql
+      - grpc
+      - proto
+
+# Reuse sapiens for user identity (actors) — logical refs, no DB constraint.
+external_imports:
+  - module: sapiens
+    types: [User]
+
+# Shared value-object types available to all models in this module.
+shared_types:
+  Timestamps:
+    created_at:
+      type: datetime
+      attributes: ["@default(now)"]
+      description: "Record creation timestamp"
+    updated_at:
+      type: datetime
+      attributes: ["@updated_at"]
+      description: "Last update timestamp"
+    deleted_at:
+      type: datetime?
+      description: "Soft delete timestamp"
+
+  Actors:
+    created_by:
+      type: uuid?
+      attributes: ["@foreign_key(sapiens.User.id)"]
+      description: "User who created this record"
+    updated_by:
+      type: uuid?
+      attributes: ["@foreign_key(sapiens.User.id)"]
+      description: "User who last updated this record"
+    deleted_by:
+      type: uuid?
+      attributes: ["@foreign_key(sapiens.User.id)"]
+      description: "User who deleted this record"
+
+  Metadata: [Timestamps, Actors]
+
+# Import each entity model (informational — discovery is a recursive glob,
+# but keeping the list accurate helps readers).
+imports:
+  - mailing.model.yaml
+  - audience.model.yaml
+  - trace.model.yaml
+  - abtesting.model.yaml
+
+# =============================================================================
+# FLAG-ID COVERAGE — docs/odoo/marketing/mass_mailing port (this module closes):
+#
+# mailing.mailing         → Mailing                       mailing.model.yaml
+#                           (state machine #1 mailing_state; schedule pair;
+#                           A/B fragment fields; NO ~30 KPI computes — they
+#                           are the stats read service, never persisted)
+# mailing.list            → MailingAudience               audience.model.yaml
+#                           (renamed — the generator's <Entity>ResponseDto /
+#                           <Entity>ListResponseDto composition collides for
+#                           Mailing + MailingList; see audience.model.yaml)
+# mailing.contact         → MailingContact                audience.model.yaml
+# mailing.subscription    → MailingSubscription           audience.model.yaml
+#                           (the m2m-THROUGH as a real entity; two-field
+#                           opt-out split, driver opt_out)
+# mailing.subscription.optout→ OptOutReason               audience.model.yaml
+#                           (SHARED catalog: serves subscription opt-out now
+#                           and mail.blacklist.opt_out_reason_id by logical ref)
+# mailing.trace           → MailingTrace                  trace.model.yaml
+#                           (machine #2 trace_status — all NINE values declared
+#                           once so the SMS overlay drives them later without
+#                           re-declaration; label/value inversion preserved)
+# mailing.filter          → MailingFilter                 trace.model.yaml
+#                           (saved declarative-domain filters; the bare-except
+#                           validation becomes the typed refuse-loudly parser)
+# utm.campaign (A/B host) → NOT re-shaped: engagement's EngagementCampaign IS
+#                           the campaign entity (the v19 collapse). Mailing and
+#                           MailingAbTest cite it by one-way logical uuid;
+#                           campaign-grain A/B control lives here (mailing_ab_tests
+#                           UNIQUE(campaign_id)) — no second campaign table.
+#
+# Hardening decided against the upstream behavior list:
+#   MMB-2 (raw attribute state write) → NOT ported: the cron's in_queue→sending
+#          flip goes THROUGH the pickup verb (a typed conditional UPDATE inside
+#          the SKIP LOCKED claim transaction) — never a raw attribute write.
+#   MMB-4 (no row lock at intake)     → claim_due_mailings FOR UPDATE SKIP
+#          LOCKED (the sms_queue claim shape) + the (mailing, recipient)
+#          partial UNIQUE as the mint fence under the lock.
+#   MMB-6 (bare-except domain parse)  → typed declarative-domain DSL parser;
+#          parse failure refuses loudly (422) at create/update AND parks the
+#          mailing at send — never a silent zero-recipient send.
+#   MMB-7 (re-sampled A/B fragment)   → persisted sampling_seed; membership is
+#          deterministic HMAC-SHA256(seed, recipient_email) mod 100 < pc.
+#   MMB-8 (opt-in-wins cross-list)    → OPT-OUT-WINS (recorded deviation from
+#          upstream's TODO: conservative consent wins).
+#   MMB-14 (utcnow auto-blacklist)    → the sweep's SQL computes the bounce
+#          window with DB now(); thresholds are config keys, not constants.
+#   MMB-15 (one failure fails all)    → per-recipient outcome reconcile: each
+#          trace owns its mail row; ONE failed recipient never fails siblings.
+#
+# Out of scope by decision (later increments own them): the SMS channel
+# overlay (mass_mailing_sms — trace_type/mailing_type carry single 'mail'
+# values and the process/pending statuses stay declared-but-undriven), the
+# qweb/html_builder render engine (body_html is stored rendered HTML; the
+# webapp owns editing), reply/bounce INBOUND routing (message_id is stored;
+# the reply driver lands with the mail inbound increment), the 24h KPI
+# digest mail (kpi_mail_required rides unconsumed; the digest is a later
+# milestone), and any portal/website edge.
+# =============================================================================

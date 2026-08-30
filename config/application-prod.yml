@@ -1,0 +1,26 @@
+server:
+  host: 0.0.0.0
+  port: ${SERVER_PORT:3000}
+  grpc_port: ${GRPC_PORT:50051}
+database:
+  url: postgresql://root:password@localhost:5432/mailing_prod
+  max_connections: 20
+  min_connections: ${DB_MIN_CONNECTIONS:10}
+logging:
+  level: info
+  format: json
+mailing:
+  send:
+    recipients_per_pass: 1000
+    mail_enqueue_batch: 100
+    inter_batch_delay_ms: 250
+  auto_blacklist:
+    max_bounces: 5
+    window_weeks: 13
+    spread_days: 7
+tracing:
+  enabled: true
+  exporter: otlp
+  endpoint: http://otel-collector:4317
+metrics:
+  enabled: true

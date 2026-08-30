@@ -1,0 +1,97 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+  grpc_port: 50051
+database:
+  url: postgresql://root:password@localhost:5432/skeletondb
+  max_connections: 10
+  min_connections: 5
+  connect_timeout: 30
+  idle_timeout: 600
+logging:
+  level: info
+  format: json
+  file: logs/mailing.log
+jobs:
+  mailing_send_queue_cron: 17 5 * * *
+mailing:
+  send:
+    recipients_per_pass: 500
+    mail_enqueue_batch: 100
+    inter_batch_delay_ms: 0
+  auto_blacklist:
+    max_bounces: 5
+    window_weeks: 13
+    spread_days: 7
+module:
+  name: mailing
+  enabled: true
+features:
+  soft_delete: true
+  state_machines: true
+  workflows: false
+entities:
+  mailing:
+    collection: mailings
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  mailing_contact:
+    collection: mailing_contacts
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  mailing_subscription:
+    collection: mailing_subscriptions
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  mailing_opt_out_reason:
+    collection: mailing_opt_out_reasons
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  mailing_trace:
+    collection: mailing_traces
+    enabled: true
+    cache_ttl: 0
+    pagination:
+      default_limit: 50
+      max_limit: 500
+  mailing_filter:
+    collection: mailing_filters
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  mailing_ab_test:
+    collection: mailing_ab_tests
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  mailing_audience:
+    collection: mailing_audiences
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+tracing:
+  enabled: true
+  exporter: otlp
+  endpoint: http://localhost:4317
+metrics:
+  enabled: true
+  endpoint: /metrics
+  port: 9090

@@ -1,0 +1,127 @@
+# mailing Module - Hooks Index
+# Version: 2.0
+#
+# Module-level configuration for hooks (lifecycle behaviors).
+# Hooks define: state machines, rules, permissions, triggers, computed fields.
+#
+# Hook files:
+#   mailing.hook.yaml        the R-M* rules with enforcement loci and the
+#                            lifecycle-none/inert declarations for every
+#                            stateless entity.
+#   mailing_state.hook.yaml  machine #1 — Mailing.state (the send pipeline)
+#   trace_status.hook.yaml   machine #2 — MailingTrace.trace_status
+#
+# This index carries: audit critical events, the outbound event vocabulary
+# (the arming fact the cron's self-arm posture keys on), and the ONE
+# scheduled job (the daily send sweep).
+
+module: mailing
+version: 2
+
+# Import all hook files (informational — discovery is a recursive glob,
+# but keeping the list accurate helps readers).
+imports:
+  - mailing.hook.yaml
+  - mailing_state.hook.yaml
+  - trace_status.hook.yaml
+
+# =============================================================================
+# Module-level configuration
+# =============================================================================
+config:
+  audit:
+    retention_days: 365
+    archive_after_days: 90
+    critical_events:
+      - mailing_launched            # the arming decision — who queued a population send
+      - mailing_state_moved         # every edge is a verb; an off-verb move is the oracle breach
+      - trace_suppressed_at_send    # compose-time pre-cancel (visible, never silent)
+      - auto_blacklist_added        # the DB-clock sweep blacklisted an address (threshold observable)
+      - ab_test_winner_promoted     # the promotion step picked + stamped a winner
+
+  notifications:
+    email_enabled: false
+    sms_enabled: false
+    push_enabled: false
+
+# =============================================================================
+# Shared domain events
+# =============================================================================
+#  - MailingQueuedForSend: OUTBOUND arming fact staged by the launch verb —
+#    the trigger that re-arms the send sweep (posture self_arming; the daily
+#    interval is only a floor). For scheduled mailings the event arms the
+#    sweep and the claim's schedule_date predicate is the gate (the mail
+#    queue's own claim takes now() and filters scheduled_date the same way).
+#  - RecipientSuppressedAtSend: OUTBOUND observable for every send-time
+#    suppression (blacklist / opt-out / duplicate) — the pre-cancelled trace
+#    exists so suppression is visible, and this event makes the sweep's
+#    suppression decisions queryable without joining the trace ledger.
+events:
+
+  MailingQueuedForSend:
+    description: "OUTBOUND: a mailing moved to in_queue (the launch verb) — re-arms the send sweep. For schedule_type='scheduled' the claim's schedule_date predicate holds the row back until due."
+    aggregate: Mailing
+    version: 1
+    storage:
+      store: true
+      retention: "180_days"
+      index_fields: [mailing_id, campaign_id]
+    fields:
+      - { name: mailing_id, type: uuid, description: "The armed mailing" }
+      - { name: campaign_id, type: "uuid?", description: "The mailing's campaign, when attributed" }
+      - { name: schedule_type, type: string, description: "immediate | scheduled" }
+      - { name: schedule_date, type: "datetime?", description: "The deferral gate when scheduled" }
+
+  RecipientSuppressedAtSend:
+    description: "OUTBOUND: the send pass suppressed a recipient (global blacklist, per-audience opt-out, or seen-list duplicate) — paired with the canceled trace carrying the matching failure_type. Visible, never silent."
+    aggregate: MailingTrace
+    version: 1
+    storage:
+      store: true
+      retention: "90_days"
+      index_fields: [mailing_id, recipient_email]
+    fields:
+      - { name: mailing_id, type: uuid, description: "The sending mailing" }
+      - { name: trace_id, type: uuid, description: "The canceled trace row" }
+      - { name: recipient_email, type: string, description: "The suppressed recipient (normalized)" }
+      - { name: cause, type: string, description: "mail_bl | mail_optout | mail_dup (the trace's failure_type)" }
+
+# =============================================================================
+# Scheduled jobs (ADR-0020 postures)
+# =============================================================================
+# Exactly ONE job. Upstream's other two crons get explicit dispositions:
+#  - the DORMANT A/B winner cron is NOT ported as a second cron — winner
+#    auto-promotion is an ordered idempotent step in this sweep (keyed by
+#    completed + winner_mailing_id, so re-runs no-op);
+#  - the 24h KPI-report tail is NOT ported at this scope — the digest is a
+#    later increment's; kpi_mail_required rides on Mailing unconsumed.
+#
+# Step order (each step idempotent, one mailing per batch under the claim):
+#   (1) claim due mailings FOR UPDATE SKIP LOCKED through the pickup verb
+#       (state-guarded conditional UPDATE — only in_queue rows move);
+#   (2) resolve recipients through the typed domain parser against the
+#       target resolver — parse failure parks the mailing (typed refusal,
+#       zero sends);
+#   (3) apply suppression (global blacklist + per-audience opt-out, opt-out-wins
+#       + seen-list — parameterized binds, no interpolation);
+#   (4) A/B fragment via the persisted seed's deterministic membership
+#       (HMAC-SHA256(seed, recipient_email) mod 100 < pc) when enabled;
+#   (5) mint per-recipient traces (outgoing) + enqueue per-recipient mail
+#       rows through the mail queue's public write service (the
+#       (mailing, recipient) unique is the mint fence);
+#   (6) complete the mailing (sent_date, kpi_mail_required on first send);
+#   (7) reconcile settled mail verdicts onto outgoing traces
+#       (set_sent/set_failed per recipient — one failure never fails the
+#       batch);
+#   (8) auto-blacklist sweep (DB-clock now() window over
+#       failure_type='mail_bounce' traces; thresholds are config keys);
+#   (9) A/B winner promotion for tests past promote_at with a done sibling.
+scheduled_jobs:
+
+  mailing-send-queue:
+    schedule: "17 5 * * *"          # the daily 05:17 send floor (off the :00 mark)
+    handler: "mailing::send_queue"
+    posture: self_arming
+    triggers: ["MailingQueuedForSend"]
+    commit_policy: commit_per_batch   # per-mailing batches; every effect idempotent (conditional writes, unique-keyed mints) — bounds the replay window
+    pickup_lock: true              # claims due mailings FOR UPDATE SKIP LOCKED — two sweeps must not double-mint (the trace unique is the fence under the lock)

@@ -1,0 +1,24 @@
+version: v1
+name: buf.build/backbone/backbone
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/bufbuild/protovalidate
+
+build:
+  excludes:
+    - src/generated/rust
+
+lint:
+  use:
+    - DEFAULT
+    - COMMENTS
+  except:
+    - FIELD_NOT_REQUIRED
+    - PACKAGE_NO_IMPORT_CYCLE
+
+breaking:
+  use:
+    - FILE
+    - PACKAGE
+    - WIRE_JSON
+    - WIRE_JSON

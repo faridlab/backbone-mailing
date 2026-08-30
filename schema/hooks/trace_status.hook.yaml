@@ -1,0 +1,68 @@
+# =============================================================================
+# trace_status — MailingTrace.trace_status (machine #2; ADR-0016 hand_set).
+#   Split into its own per-entity hook file because the validator resolves a
+#   field's `state_machine:` ref against per-entity hook names.
+#
+# HAND-SET lifecycle driven EXTERNALLY by the tracking channels: transport
+# verdict, open pixel, tracked click, (future) inbound reply/bounce, and
+# send-time suppression. Each edge is one of the seven set_* verbs on the
+# trace write service, applied as a MONOTONIC-RANK-GUARDED conditional
+# UPDATE — a late open pixel never downgrades a replied trace, and trace
+# writes never bypass the verbs. set_clicked stamps links_click_datetime
+# WITHOUT moving state by itself (the click route calls set_opened +
+# set_clicked together), so it is documented here rather than declared as
+# an edge.
+#
+# ALL NINE values are declared NOW — including process/pending, which the
+# mail channel never drives. The later SMS overlay drives them through its
+# own channel-state mapping WITHOUT re-declaration (the single-declaration
+# contract). The LABEL/VALUE INVERSION is preserved VERBATIM on the model
+# field's display_labels (pending displays 'Sent', sent displays
+# 'Delivered'): the stored value is the contract, the display is data.
+# =============================================================================
+
+name: trace_status
+model: MailingTrace
+
+states:
+  field: trace_status
+  values:
+    outgoing:
+      initial: true
+    process: {}
+    pending: {}
+    sent: {}
+    open: {}
+    reply:
+      final: true
+    bounce:
+      final: true
+    error:
+      final: true
+    cancel:
+      final: true
+  transitions:
+    set_sent:
+      from: [outgoing, process, pending]
+      to: sent
+      message: "Transport verdict accepted — stamps sent_datetime, clears failure_type/reason (process/pending are SMS-overlay sources, driven later)"
+    set_opened:
+      from: [outgoing, sent, process, pending]
+      to: open
+      message: "Open pixel, tracked click, or reply — IDEMPOTENT vs later states: rows already open/reply/bounce are skipped (the rank guard), never downgraded"
+    set_replied:
+      from: [outgoing, sent, open, process, pending]
+      to: reply
+      message: "Inbound reply matched message_id (the future inbound increment) — also stamps open_datetime"
+    set_bounced:
+      from: [outgoing, sent, open, process, pending]
+      to: bounce
+      message: "Bounce verdict — sets failure_type='mail_bounce' (the auto-blacklist window's fact source); also stamps open_datetime (upstream treats a bounce as a touch)"
+    set_failed:
+      from: [outgoing, sent, process, pending]
+      to: error
+      message: "Transport failure — sets failure_type/failure_reason; ONE failed recipient never fails its batch siblings (each trace owns its own mail row)"
+    set_canceled:
+      from: [outgoing]
+      to: cancel
+      message: "Send-time suppression — blacklisted / opted-out / duplicate / void email: a trace is still minted (visible, never silent) and immediately canceled with the matching failure_type; canceled rows sit OUTSIDE the mint-fence unique so re-targeting can mint a fresh live trace"

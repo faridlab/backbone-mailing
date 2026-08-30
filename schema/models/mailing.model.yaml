@@ -1,0 +1,214 @@
+# =============================================================================
+# mailing — the flagship model (Odoo `mailing.mailing`). A composed bulk-email
+#   campaign: content, scheduling, recipient resolution, A/B fragment fields,
+#   and the hand-set send-pipeline lifecycle drained by the ONE daily send
+#   cron (schema/hooks/index.hook.yaml, mailing-send-queue).
+#
+# PORT DECISIONS (source: docs/odoo/marketing/mass_mailing — cycle 4):
+#  - state is EXACTLY draft → in_queue → sending → done (machine
+#    `mailing_state`, schema/hooks/mailing_state.hook.yaml). NO `canceled`
+#    (cancel reverts to draft, keeps traces for audit) and NO `scheduled`
+#    (scheduled-ness is the schedule_type/schedule_date pair — plain columns
+#    whose coupling lives in the launch/cancel verbs, not a compute).
+#  - HEADLESS RENDERING: body_html is the stored RENDERED html. There is no
+#    body_arch and no qweb/html_builder engine — the webapp owns editing;
+#    this module stores what it is told to send.
+#  - mailing_domain is a DECLARATIVE json DSL, never a literal Python domain
+#    text and never eval'd. The typed parser in the write service returns
+#    Result<CompiledDomain, DomainInvalid> — malformed input refuses loudly
+#    (422) at create/update and parks the mailing at send with zero sends
+#    (the silent zero-recipient send class is closed by construction).
+#  - target_model is the polymorphic recipient marker modeled as a CLOSED
+#    ENUM + a resolver contract (mailing-local contact resolver; party
+#    resolver via the host-composed port) — NOT a meta-model registry column.
+#  - campaign/medium/source are one-way logical uuid refs into engagement's
+#    attribution masters (the v19 collapse: EngagementCampaign IS the campaign
+#    entity). The write verb resolves-or-requires them; NO create-inside-a-
+#    read (the upstream medium auto-create compute does not port).
+#  - A/B fragment fields live HERE (mailing-local, chair design call b); the
+#    campaign-grain control entity is MailingAbTest (abtesting.model.yaml)
+#    citing the same campaign one-way.
+#  - The ~30 non-stored KPI computes are the stats READ SERVICE (one grouped
+#    query per mailing-set) — none are persisted fields. kpi_mail_required
+#    rides as a flag, unconsumed until the digest increment.
+#  - email_from is required plain storage; its upstream hybrid compute does
+#    not port. The G-MM2 shape survives as a DB CHECK in the hand-written
+#    hardening migration (fires on raw SQL).
+# =============================================================================
+
+models:
+
+  - name: Mailing
+    collection: mailings
+    description: "Mass Mailing (Odoo `mailing.mailing`). The flagship — a composed bulk-email campaign with the hand-set draft/in_queue/sending/done lifecycle (NO canceled/scheduled values), the schedule_type/schedule_date pair, declarative-json recipient domains, A/B fragment fields, and one-way logical campaign attribution into engagement. The send engine is ONE daily cron claiming due mailings FOR UPDATE SKIP LOCKED through the pickup verb. KPI counts are read-side (stats service), never persisted."
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique record id"
+
+      # ---- identity & content ------------------------------------------------
+      subject:
+        type: string
+        attributes: ["@required", "@max(255)"]
+        description: "Email subject (the record's display name)."
+      preview:
+        type: string?
+        attributes: ["@max(255)"]
+        description: "Preview text spliced at the top of the body by the sending host (short inbox preheader)."
+      body_html:
+        type: string
+        attributes: ["@required"]
+        description: "The RENDERED html body to send — stored as-is. No builder/architecture column and no server-side render engine exists here (headless port: the webapp owns editing and rendering)."
+      email_from:
+        type: string
+        attributes: ["@required", "@max(255)"]
+        description: "Sender address, plain storage (the upstream hybrid compute does not port). The G-MM2 CHECK (email_from present for mail-type mailings) is installed by the hardening migration and fires on raw SQL."
+      reply_to:
+        type: string?
+        attributes: ["@max(255)"]
+        description: "Optional reply-to address (replies route here when set; inbound reply routing itself is a later mail increment)."
+      keep_archives:
+        type: boolean
+        attributes: ["@default(true)"]
+        description: "If false, the per-recipient mail rows the engine enqueues are auto-deleted after the verdict lands — traces survive via their denormalized mail_id (the GC seam)."
+
+      # ---- the send-pipeline lifecycle (machine mailing_state) ----------------
+      state:
+        type: MailingState
+        attributes: ["@required", "@default(draft)"]
+        lifecycle:
+          shape: hand_set
+          state_machine: mailing_state
+        description: "THE lifecycle — draft → in_queue → sending → done, and ONLY those four values. NO canceled (cancel reverts to draft) and NO scheduled (that is the schedule pair). Every edge is a named verb on the write service — including the cron's in_queue→sending claim, which is a state-guarded conditional UPDATE inside the SKIP LOCKED pickup transaction (never a raw attribute write)."
+
+      # ---- scheduling: the hybrid pair collapsed to plain columns ------------
+      schedule_type:
+        type: MailingScheduleType
+        attributes: ["@required", "@default(immediate)"]
+        lifecycle:
+          shape: hand_set
+        description: "immediate = send on the next sweep; scheduled = defer until schedule_date. Hand-set; the launch/cancel verbs clear or keep schedule_date accordingly (write-path coupling, no compute)."
+      schedule_date:
+        type: datetime?
+        description: "Deferred-send time. Claim predicate arm: due mailings are state=in_queue AND (schedule_date IS NULL OR schedule_date <= now()) — the same shape the mail queue's own claim uses."
+      sent_date:
+        type: datetime?
+        description: "Stamped by the complete/complete_empty verbs (all recipient mail rows enqueued, or zero recipients resolved). Never written elsewhere."
+
+      # ---- channel + recipient resolution ------------------------------------
+      mailing_type:
+        type: MailingType
+        attributes: ["@required", "@default(mail)"]
+        lifecycle:
+          shape: inert
+        description: "Channel selector — the single value 'mail' in this module. The SMS overlay adds 'sms' later WITHOUT reshaping this entity (the overlay drives the already-declared process/pending trace statuses)."
+      target_model:
+        type: MailingTargetModel
+        attributes: ["@required", "@default(mailing_contact)"]
+        lifecycle:
+          shape: inert
+        description: "The recipient population: mailing_contact (resolved mailing-locally) or party (resolved through the host-composed party resolver port). A closed capability enum — NOT a meta-model registry (upstream's ir.model column does not port)."
+      mailing_domain:
+        type: json
+        attributes: ["@required", "@default('{}')"]
+        description: "The declarative recipient-filter DSL as typed json (never a literal Python domain, never eval'd). The write service's parser returns Result<CompiledDomain, DomainInvalid>: malformed input is a typed 422 at create/update; at send the mailing is PARKED (state stays sending, error recorded, zero recipients touched) — never a silent zero-recipient send."
+      use_exclusion_list:
+        type: boolean
+        attributes: ["@default(true)"]
+        description: "When true (default) the send pass applies all suppression layers: the global email blacklist (mail module), per-audience opt-out (opt-out-wins across targeted audiences), and the seen-list (existing live traces — keyed per campaign when A/B is on)."
+
+      # ---- attribution (one-way logical refs into engagement) -----------------
+      campaign_id:
+        type: uuid?
+        attributes: ["@foreign_key(engagement.EngagementCampaign.id)", "@exclude_from_foreign_key_check", "@indexed"]
+        description: "Attribution: campaign # logical FK engagement.EngagementCampaign.id — THE single campaign entity (v19 collapse; no second campaign table here). Clearing it while ab_testing_enabled is refused (rule R-M8)."
+      medium_id:
+        type: uuid?
+        attributes: ["@foreign_key(engagement.EngagementMedium.id)", "@exclude_from_foreign_key_check"]
+        description: "Attribution: medium # logical FK engagement.EngagementMedium.id — the write verb resolves-or-requires; it never creates a master inside a read (the upstream auto-create compute does not port)."
+      source_id:
+        type: uuid?
+        attributes: ["@foreign_key(engagement.EngagementSource.id)", "@exclude_from_foreign_key_check"]
+        description: "Attribution: source # logical FK engagement.EngagementSource.id."
+      user_id:
+        type: uuid?
+        attributes: ["@exclude_from_foreign_key_check"]
+        description: "Responsible user # logical FK sapiens.User.id (no context-rebind machinery — rendering happens host-side)."
+
+      # ---- A/B fragment fields (campaign-grain control: MailingAbTest) --------
+      ab_testing_enabled:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "A/B gate. When true this mailing sends to a deterministic fragment (not the whole audience) and seen-list dedup keys by campaign across siblings."
+      ab_testing_pc:
+        type: integer
+        attributes: ["@default(10)"]
+        description: "A/B fragment percentage 0..100 — the G-MM1 CHECK is installed by the hardening migration and fires on raw SQL (rule R-M1)."
+      ab_test_id:
+        type: uuid?
+        attributes: ["@foreign_key(MailingAbTest.mailings)", "@exclude_from_foreign_key_check", "@indexed"]
+        description: "The campaign-grain A/B control row this mailing belongs to # logical FK MailingAbTest.id (sampling seed, winner selection, promotion state)."
+      kpi_mail_required:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "Set on first send; rides UNCONSUMED until the KPI digest increment owns its reader (the 24h report tail does not port here)."
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [state, schedule_date]
+        description: "The send-cron claim arm — due mailings are probed by (state, schedule_date) inside the SKIP LOCKED claim"
+      - type: index
+        fields: [campaign_id]
+        description: "Campaign mailings rollup + A/B sibling lookup"
+      - type: index
+        fields: [ab_test_id]
+        description: "Sibling fragment lookup per A/B test"
+
+# =============================================================================
+# Enums (mailing)
+# =============================================================================
+
+enums:
+  - name: MailingState
+    description: "The send-pipeline lifecycle — hand-set through the transition verbs (machine `mailing_state`); the cron's claim moves the SAME edges through the pickup verb, never raw writes"
+    variants:
+      - name: draft
+        description: "Being composed (the only state edits happen here; cancel reverts here)"
+        default: true
+      - name: in_queue
+        description: "Armed — the send cron's claim predicate owns it from here"
+      - name: sending
+        description: "Claimed by a sweep — recipients resolving/minting under the claim transaction"
+      - name: done
+        description: "All recipient mail rows enqueued (or zero recipients resolved) — sent_date stamped; a resting state, not a dead end (retry_failed still exits it)"
+
+  - name: MailingScheduleType
+    description: "Orthogonal to state (there is no 'scheduled' state value) — the pair's coupling lives in the launch/cancel verbs. Odoo's literal value 'now' is renamed 'immediate' (recorded deviation): the generator maps an unquoted default ident 'now' to SQL NOW() — invalid on an enum column — while the quoted form emits a String default the entity builder cannot use for an enum-typed field"
+    variants:
+      - name: immediate
+        description: "Send on the next sweep (schedule_date cleared by the launch verb)"
+        default: true
+      - name: scheduled
+        description: "Defer until schedule_date; the claim's schedule_date predicate is the gate"
+
+  - name: MailingType
+    description: "Channel selector — single value now; the SMS overlay adds 'sms' without reshaping the entity"
+    variants:
+      - name: mail
+        description: "Outbound email through the mail module's queue"
+        default: true
+
+  - name: MailingTargetModel
+    description: "The recipient population as a closed capability enum + resolver contract (mailing-local contact resolver; party resolver via the host-composed port) — not a meta-model registry"
+    variants:
+      - name: mailing_contact
+        description: "mailing.mailing_contacts — resolved mailing-locally"
+        default: true
+      - name: party
+        description: "party parties — resolved through the host-composed party resolver port"

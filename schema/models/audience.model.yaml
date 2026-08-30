@@ -1,0 +1,188 @@
+# =============================================================================
+# mailing — audience cluster: MailingAudience + MailingContact +
+#   MailingSubscription (the m2m-THROUGH as a real entity) + OptOutReason (the
+#   shared reason catalog). Source: docs/odoo/marketing/mass_mailing
+#   (mailing_list.py, mailing_contact.py, mailing_subscription.py,
+#   mailing_subscription_optout.py).
+#
+# NAMING: Odoo's `mailing.list` entity is renamed MailingAudience (collection
+#   mailing_audiences; subscription column mailing_audience_id). Reason: the
+#   generator composes DTO type names as <Entity>ResponseDto and
+#   <Entity>ListResponseDto, so an entity literally named MailingList collides
+#   with Mailing's own collection DTO (Mailing + ListResponseDto ===
+#   MailingList + ResponseDto — a duplicate-symbol compile error). Recorded
+#   deviation; semantics unchanged.
+#
+# PORT DECISIONS:
+#  - The subscription IS the relation: both list→contacts and contact→lists
+#    resolve through mailing_subscriptions (upstream's real m2m-through
+#    table). NO informational collection back-refs are declared — the
+#    through-entity is the single source of membership truth.
+#  - THE TWO-FIELD OPT-OUT SPLIT (lifecycle `split`): opt_out is the hand-set
+#    driver; opt_out_datetime derives (cleared when the driver is false,
+#    stamped DB-now() when true) — coupling lives in the subscription
+#    create/update verbs, never ORM-style inverse magic. Setting
+#    opt_out_reason_id forces opt_out=true (an implicit opt-out).
+#  - AUDIT POSTURE: opt-out NEVER deletes the row — suppression is
+#    opt_out=true + timestamp + reason; re-subscribe flips the flag back
+#    (history preserved in audit metadata). The mirror of mail.blacklist's
+#    own append-only-archive posture.
+#  - CROSS-LIST POLICY = OPT-OUT-WINS (recorded deviation from upstream's
+#    opt-in-wins TODO): when a mailing targets lists A+B and the recipient's
+#    subscription on ANY targeted list has opt_out=true, the recipient is
+#    suppressed. Conservative consent wins.
+#  - UNIQUE(contact_id, mailing_audience_id) among live rows — upstream's
+#    only composite unique, kept as a real partial index (fires on raw SQL).
+#  - MailingContact.email is stored LOWERCASED — the dedup/join key (the
+#    blacklist + seen-list + bounce joins all key on it). first/last name are
+#    plain always-available columns (upstream's view-toggle dance is UI).
+#  - country_code is a plain ISO alpha-2 column — no geo FK at this scope.
+#  - OptOutReason is the SHARED catalog: it serves subscription opt-out at
+#    full fidelity now, and mail.blacklist.opt_out_reason_id references it by
+#    logical uuid from the mail side (cross-addon logical ref — upstream's
+#    own shape).
+# =============================================================================
+
+models:
+
+  - name: MailingAudience
+    collection: mailing_audiences
+    description: "Mailing Audience (Odoo `mailing.list`, renamed — see the NAMING note in this file's header) — the audience bucket. Memberships resolve through mailing_subscriptions (the real through-entity); no anonymous m2m exists. Archive-guarded: the write path refuses to archive an audience referenced by any mailing with state != done (rule R-M7 — cross-table, service-enforced)."
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique record id"
+      name:
+        type: string
+        attributes: ["@required", "@max(120)"]
+        description: "List name."
+      active:
+        type: boolean
+        attributes: ["@default(true)"]
+        description: "Archive flag. Archiving is REFUSED while any non-done mailing targets the audience (rule R-M7 — the guard is procedural/cross-table; the flag itself stays plain)."
+      is_public:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "If true, the audience appears on the recipient-facing subscription-preferences surface (self-service subscriptions only create onto public audiences)."
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: index
+        fields: [active]
+        description: "Default-list filter arm (inactive lists drop out)"
+
+  - name: MailingContact
+    collection: mailing_contacts
+    description: "Mailing Contact (Odoo `mailing.contact`) — a subscriber record. email is the dedup/join key, stored lowercased; the global blacklist, the seen-list, and the bounce window all join on it. name derives from first/last when present but stays a plain editable column (no view-toggle machinery)."
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique record id"
+      name:
+        type: string?
+        attributes: ["@max(120)"]
+        description: "Display name — plain editable column; hosts commonly fill it from first/last at import."
+      first_name:
+        type: string?
+        attributes: ["@max(120)"]
+        description: "Given name (always available — upstream's split-name config toggle is UI presentation, not schema)."
+      last_name:
+        type: string?
+        attributes: ["@max(120)"]
+        description: "Family name."
+      email:
+        type: string
+        attributes: ["@required", "@max(255)"]
+        description: "Recipient email, STORED LOWERCASED (case-folding is app-layer on write — the same fold the mail blacklist applies). Unique among live rows; THE dedup/join key."
+      company_name:
+        type: string?
+        attributes: ["@max(120)"]
+        description: "Free-text contact company (not a foreign key)."
+      country_code:
+        type: string?
+        attributes: ["@max(2)"]
+        description: "Optional ISO 3166-1 alpha-2 country code — plain column, no geo FK at this scope."
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: unique
+        fields: [email]
+        where: "deleted_at IS NULL"
+        description: "One live contact per email (the dedup grain; fires on raw SQL)"
+
+  - name: MailingSubscription
+    collection: mailing_subscriptions
+    description: "Mailing Subscription (Odoo `mailing.subscription`) — THE m2m-through as a real entity: both audience and contact sides resolve memberships through these rows, which carry the canonical per-audience opt-out state. Opt-out NEVER deletes: suppression is the flag + timestamp + reason; re-subscribe flips the flag back with audit history intact. UNIQUE(contact, audience) among live rows (the upstream composite unique, kept)."
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique record id"
+      contact_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(MailingContact.subscriptions)", "@exclude_from_foreign_key_check", "@indexed"]
+        description: "The subscriber # logical FK MailingContact.id — half of the unique membership pair."
+      mailing_audience_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(MailingAudience.subscriptions)", "@exclude_from_foreign_key_check", "@indexed"]
+        description: "The audience # logical FK MailingAudience.id — the other half of the unique membership pair (Odoo column name: mailing_list_id)."
+      opt_out:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "THE canonical per-audience opt-out flag — hand-set DRIVER of the split pair. Force-set true when opt_out_reason_id is set (setting a reason is an implicit opt-out). Suppression policy across targeted audiences is OPT-OUT-WINS (recorded deviation from upstream's opt-in-wins TODO)."
+      opt_out_datetime:
+        type: datetime?
+        lifecycle:
+          shape: split
+          driver: opt_out
+        description: "DERIVED half of the split: cleared when opt_out=false, stamped DB-now() when true — coupling lives in the subscription create/update verbs (never inverse magic)."
+      opt_out_reason_id:
+        type: uuid?
+        attributes: ["@foreign_key(OptOutReason.subscriptions)", "@exclude_from_foreign_key_check"]
+        description: "Why they opted out # logical FK OptOutReason.id. Setting it forces opt_out=true."
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: unique
+        fields: [contact_id, mailing_audience_id]
+        where: "deleted_at IS NULL"
+        description: "One live membership per (contact, audience) — the upstream composite unique, fires on raw SQL (rule R-M4)"
+      - type: index
+        fields: [mailing_audience_id, opt_out]
+        description: "Per-audience opt-out suppression arm (the send pass probes targeted audiences' opt-outs)"
+
+  - name: OptOutReason
+    collection: mailing_opt_out_reasons
+    description: "Opt-out Reason (Odoo `mailing.subscription.optout`) — pure lookup catalog (name/sequence/is_feedback). SHARED: serves subscription opt_out_reason_id at full fidelity now, and mail.blacklist.opt_out_reason_id references it by logical uuid from the mail side (cross-addon logical ref — upstream's own shape)."
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique record id"
+      name:
+        type: string
+        attributes: ["@required", "@max(120)"]
+        description: "Reason label."
+      sequence:
+        type: integer
+        attributes: ["@default(10)"]
+        description: "Sort order."
+      is_feedback:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "If true, choosing this reason triggers the free-text feedback flow on the unsubscribe surface."
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"

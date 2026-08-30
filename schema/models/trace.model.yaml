@@ -1,0 +1,234 @@
+# =============================================================================
+# mailing — trace cluster: MailingTrace (the per-recipient lifecycle ledger)
+#   + MailingFilter (saved declarative-domain filters). Source:
+#   docs/odoo/marketing/mass_mailing (mailing_trace.py, mailing_filter.py).
+#
+# PORT DECISIONS:
+#  - trace_status declares ALL NINE values NOW (machine `trace_status`,
+#    schema/hooks/trace_status.hook.yaml) even though the mail channel drives
+#    only outgoing→sent→open→reply / bounce / error / cancel: process and
+#    pending are declared ONCE so the SMS overlay drives them later without
+#    re-declaration. The LABEL/VALUE INVERSION is preserved VERBATIM
+#    (ADR-0016): pending displays 'Sent', sent displays 'Delivered' —
+#    consumers key off the VALUES; relabelling is safe-ish, re-valueing is
+#    NOT.
+#  - THE MINT FENCE upstream lacks: UNIQUE(mailing_id, recipient_id) among
+#    live non-canceled rows — under the send claim's SKIP LOCKED this makes
+#    the duplicate-mint class a loud INSERT failure instead of a silent
+#    duplicate (two concurrent sweeps each mint at most once; the loser's
+#    insert fails and is logged). Suppression-cancel traces sit OUTSIDE the
+#    unique so re-targeting after re-subscribe can mint a fresh live trace.
+#  - Trace writes NEVER bypass the seven set_* verbs on the trace write
+#    service; each applies as a monotonic-rank-guarded conditional UPDATE
+#    (a late open pixel never downgrades a replied trace).
+#  - mail_id is the upstream's denormalized mail-mail-id seam MIRRORED, not
+#    an FK: the trace outlives the queue row it points at (auto-delete /
+#    keep_archives=false). Upstream names it mail_mail_id_int because their
+#    PK is an int; backbone ids are uuids, so it is named plainly mail_id
+#    (recorded rename).
+#  - recipient anchor is (recipient_model, recipient_id, recipient_email):
+#    recipient_id is NOT NULL by column constraint (upstream's only hard DB
+#    guard on this model, kept); recipient_email is the normalized join key
+#    for seen-list + bounce matching.
+#  - campaign_id is DENORMALIZED at mint (copied from the mailing) — campaign
+#    rollups and the A/B seen-list never join the mailing table.
+#  - MailingFilter validates through the SAME typed refuse-loudly domain
+#    parser as Mailing.mailing_domain (upstream's bare-except does not port).
+# =============================================================================
+
+models:
+
+  - name: MailingTrace
+    collection: mailing_traces
+    description: "Mailing Statistics / per-recipient trace (Odoo `mailing.trace`) — send/open/click/reply/bounce/error per recipient, stored SEPARATELY from the mail queue rows so mails can be deleted without losing stats. trace_status is hand-set via the seven set_* verbs with the label/value inversion preserved (pending='Sent', sent='Delivered'). The (mailing, recipient) partial unique is the mint fence upstream never had."
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique record id"
+      trace_type:
+        type: TraceType
+        attributes: ["@required", "@default(mail)"]
+        lifecycle:
+          shape: inert
+        description: "Channel — the single value 'mail' here; the SMS overlay adds 'sms' and drives the already-declared process/pending statuses."
+      is_test_trace:
+        type: boolean
+        attributes: ["@default(false)"]
+        description: "Minted by a test send — no tracking pixel, no real trace effects, excluded from campaign stats."
+      mailing_id:
+        type: uuid
+        attributes: ["@required", "@foreign_key(Mailing.traces)", "@exclude_from_foreign_key_check", "@indexed"]
+        description: "The owning mailing # logical FK Mailing.id."
+      campaign_id:
+        type: uuid?
+        attributes: ["@foreign_key(engagement.EngagementCampaign.id)", "@exclude_from_foreign_key_check", "@indexed"]
+        description: "DENORMALIZED copy of the mailing's campaign at mint time — campaign rollups and the A/B per-campaign seen-list never join the mailing table (survives later attribution edits)."
+      recipient_model:
+        type: string
+        attributes: ["@required", "@max(64)"]
+        description: "The recipient population marker ('mailing_contact' | 'party') — mirrors Mailing.target_model's closed vocabulary at mint time."
+      recipient_id:
+        type: uuid
+        attributes: ["@required", "@exclude_from_foreign_key_check"]
+        description: "The recipient row id (paired with recipient_model — traces are ALWAYS polymorphic, never orphan; NOT NULL by column constraint, the kept upstream hard guard)."
+      recipient_email:
+        type: string
+        attributes: ["@required", "@max(255)", "@indexed"]
+        description: "Normalized (lowercased) recipient email — the seen-list, bounce-window, and blacklist join key."
+      mail_id:
+        type: uuid?
+        attributes: ["@foreign_key(messaging.Mail.traces)", "@exclude_from_foreign_key_check", "@indexed"]
+        description: "The enqueued mail row # logical FK messaging.Mail.id, NO DB constraint — the trace SURVIVES queue-row GC (the mirrored mail_mail_id_int seam; named plainly because backbone ids are uuids). The outcome reconcile joins through it."
+      message_id:
+        type: string?
+        attributes: ["@max(255)", "@exclude_from_foreign_key_check"]
+        description: "RFC-2392 Message-ID of the sent mail — stored now for the future inbound reply/bounce match (inbound routing is a later mail increment)."
+
+      # ---- THE per-recipient lifecycle (machine trace_status) -----------------
+      trace_status:
+        type: TraceStatus
+        attributes: ["@required", "@default(outgoing)", "@indexed"]
+        lifecycle:
+          shape: hand_set
+          state_machine: trace_status
+          display_labels:
+            outgoing: "Outgoing"
+            process: "Processing"
+            pending: "Sent"
+            sent: "Delivered"
+            open: "Opened"
+            reply: "Replied"
+            bounce: "Bounced"
+            error: "Exception"
+            cancel: "Cancelled"
+        description: "THE per-recipient lifecycle — HAND-SET via the seven set_* verbs (set_sent/set_opened/set_clicked/set_replied/set_bounced/set_failed/set_canceled), each a monotonic-rank-guarded conditional UPDATE (a late pixel never downgrades a replied trace). LABEL/VALUE INVERSION preserved VERBATIM: pending displays 'Sent', sent displays 'Delivered'. process/pending are declared once, driven only by the later SMS overlay."
+      failure_type:
+        type: TraceFailureType?
+        description: "Failure code, set by set_failed/set_bounced; suppression cancels carry mail_bl / mail_optout / mail_dup. The bounce-window sweep scans failure_type='mail_bounce' (the auto-blacklist fact source)."
+      failure_reason:
+        type: string?
+        description: "Free-text failure detail."
+
+      # ---- event timestamps (hand-set by the set_* verbs) ---------------------
+      sent_datetime:
+        type: datetime?
+        description: "Stamped by set_sent (transport accepted). The KPI 'sent' count uses THIS timestamp, NOT trace_status (the documented sent/delivered asymmetry: sent = was ever submitted; delivered = status currently sent/open/reply)."
+      open_datetime:
+        type: datetime?
+        description: "Stamped by set_opened (open pixel OR click OR reply)."
+      reply_datetime:
+        type: datetime?
+        description: "Stamped by set_replied (inbound reply matching message_id — future increment)."
+      links_click_datetime:
+        type: datetime?
+        description: "Stamped by set_clicked — the LAST click datetime (multi-click). clicks_ratio computes from this column IS NOT NULL (the click fact)."
+
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+    indexes:
+      - type: unique
+        fields: [mailing_id, recipient_id]
+        where: "deleted_at IS NULL AND trace_status <> 'cancel'"
+        description: "THE MINT FENCE upstream lacks — at most one live (non-canceled) trace per recipient per mailing, under the send claim's SKIP LOCKED; a duplicate mint fails loudly instead of silently duplicating (rule R-M5)"
+      - type: index
+        fields: [campaign_id, recipient_id]
+        description: "The A/B per-campaign seen-list arm (dedup across siblings when ab_testing_enabled)"
+      - type: index
+        fields: [mailing_id, trace_status]
+        description: "The stats read service's GROUP BY arm (one grouped query per mailing-set)"
+      - type: index
+        fields: [recipient_email, failure_type]
+        description: "The auto-blacklist bounce-window arm (recipient_email + failure_type='mail_bounce' within now()-interval)"
+
+  - name: MailingFilter
+    collection: mailing_filters
+    description: "Mailing Favorite Filters (Odoo `mailing.filter`) — a saved declarative-domain filter scoped to a target population, reusable across mailings. Validation goes through the SAME typed refuse-loudly parser as Mailing.mailing_domain (upstream's bare-except swallow does not port — a malformed filter is a typed 422 at save)."
+    fields:
+      id:
+        type: uuid
+        attributes: ["@id", "@default(uuid)"]
+        description: "Unique record id"
+      name:
+        type: string
+        attributes: ["@required", "@max(120)"]
+        description: "Filter label."
+      target_model:
+        type: MailingTargetModel
+        attributes: ["@required", "@default(mailing_contact)"]
+        lifecycle:
+          shape: inert
+        description: "The recipient population this filter applies to (same closed vocabulary as Mailing.target_model)."
+      domain:
+        type: json
+        attributes: ["@required", "@default('{}')"]
+        description: "The declarative recipient-filter DSL as typed json — validated by the shared parser (parse failure is a typed 422 at create/update; never silently accepted)."
+      metadata:
+        type: Metadata
+        attributes: ["@audit_metadata"]
+        description: "Audit metadata"
+
+# =============================================================================
+# Enums (trace cluster)
+# =============================================================================
+
+enums:
+  - name: TraceType
+    description: "Trace channel — single value now; the SMS overlay adds 'sms'"
+    variants:
+      - name: mail
+        description: "Outbound email trace"
+        default: true
+
+  - name: TraceStatus
+    description: "The per-recipient lifecycle — hand-set via the seven set_* verbs; ALL NINE values declared once so the SMS overlay drives process/pending later without re-declaration. LABEL/VALUE INVERSION preserved verbatim: pending displays 'Sent', sent displays 'Delivered'"
+    variants:
+      - name: outgoing
+        description: "Minted, awaiting the transport verdict (default at mint)"
+        default: true
+      - name: process
+        description: "Channel is actively sending (SMS overlay only — declared now, driven later)"
+      - name: pending
+        description: "Handed to the transport, awaiting confirmation (SMS overlay only; displays 'Sent')"
+      - name: sent
+        description: "Transport accepted (set_sent on the verdict; displays 'Delivered')"
+      - name: open
+        description: "Opened (set_opened — pixel, click, or reply; idempotent vs later states)"
+      - name: reply
+        description: "Replied (set_replied — the future inbound match)"
+      - name: bounce
+        description: "Bounced (set_bounced — feeds the auto-blacklist bounce window)"
+      - name: error
+        description: "Failed (set_failed with failure_type/failure_reason)"
+      - name: cancel
+        description: "Suppressed at send (set_canceled — blacklisted / opted-out / duplicate / void email; visible, never silent)"
+
+  - name: TraceFailureType
+    description: "Failure vocabulary — transport verdicts, synthesized invalid-address classes, and the send-time suppression codes carried by canceled traces"
+    variants:
+      - name: unknown
+        description: "Unclassified failure"
+        default: true
+      - name: mail_bounce
+        description: "SMTP/report bounce — the auto-blacklist fact"
+      - name: mail_spam
+        description: "Flagged as spam by the recipient side"
+      - name: mail_email_invalid
+        description: "Recipient address syntactically/semantically invalid"
+      - name: mail_email_missing
+        description: "Recipient has no address"
+      - name: mail_from_invalid
+        description: "Sender address rejected"
+      - name: mail_from_missing
+        description: "Sender address absent"
+      - name: mail_smtp
+        description: "Transport/SMTP failure"
+      - name: mail_bl
+        description: "Suppressed: globally blacklisted (set at send, trace canceled)"
+      - name: mail_dup
+        description: "Suppressed: duplicate recipient (set at send, trace canceled)"
+      - name: mail_optout
+        description: "Suppressed: per-audience opt-out (set at send, trace canceled)"

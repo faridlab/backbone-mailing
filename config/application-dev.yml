@@ -1,0 +1,17 @@
+server:
+  host: 127.0.0.1
+database:
+  url: postgresql://root:password@localhost:5432/mailing_dev
+  max_connections: 5
+logging:
+  level: debug
+  format: pretty
+mailing:
+  send:
+    recipients_per_pass: 50
+    mail_enqueue_batch: 10
+    inter_batch_delay_ms: 0
+tracing:
+  enabled: false
+metrics:
+  enabled: false

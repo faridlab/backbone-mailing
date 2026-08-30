@@ -1,6 +1,6 @@
 [package]
 name = "backbone-mailing"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Email marketing — mass-mail engine: audiences, subscriptions, hand-set mailing lifecycle, seeded A/B testing, per-recipient traces (Odoo mass_mailing port)"
 

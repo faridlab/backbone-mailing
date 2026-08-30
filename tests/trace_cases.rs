@@ -294,3 +294,223 @@ async fn mint_fence_rejects_duplicate_live_traces_and_cancel_reopens() {
     let _ = cancel_id;
     db.dispose().await;
 }
+
+// ── SMS-overlay verbs (same shapes, channel-specific edges) ──────────────────
+
+/// Mint an SMS-channel trace directly (the repository mint is mail-typed;
+/// sms traces are minted by the sms send walk — tests bypass it on purpose
+/// and may stamp the gateway seam by hand or leave it for the attach verb).
+async fn mint_sms_trace(pool: &sqlx::PgPool, phone_email: &str, sms_uuid: Option<&str>) -> Uuid {
+    let (trace_id, mailing_id, recipient_id) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+    sqlx::query(
+        r#"INSERT INTO mailing.mailing_traces
+               (id, trace_type, mailing_id, recipient_model, recipient_id,
+                recipient_email, sms_uuid, trace_status, metadata)
+           VALUES ($1, 'sms', $2, 'mailing_contact', $3, $4, $5, 'outgoing',
+                   jsonb_build_object('created_at', to_jsonb(now())))"#,
+    )
+    .bind(trace_id)
+    .bind(mailing_id)
+    .bind(recipient_id)
+    .bind(phone_email)
+    .bind(sms_uuid)
+    .execute(pool)
+    .await
+    .expect("sms trace mint");
+    trace_id
+}
+
+#[tokio::test]
+async fn sms_verbs_advance_the_partial_order_and_replays_skip() {
+    let Some(db) = TestDb::new("smsrank").await else {
+        return skipped("smsrank");
+    };
+    let svc = TraceWriteService::new(db.pool.clone());
+
+    // The compressed step: a tracker already past 'process' advances an
+    // outgoing trace to pending in ONE move (the partial order the
+    // outgoing→pending edge admits).
+    let compressed = mint_sms_trace(&db.pool, "compressed@example.id", Some("u-compressed")).await;
+    assert_eq!(
+        svc.set_pending(compressed).await.expect("compressed"),
+        TraceTransition::Moved
+    );
+    // A LATE process verdict must not downgrade a pending row.
+    assert_eq!(
+        svc.set_process(compressed).await.expect("late process"),
+        TraceTransition::Skipped
+    );
+    // Pending replay skips.
+    assert_eq!(
+        svc.set_pending(compressed).await.expect("replay"),
+        TraceTransition::Skipped
+    );
+
+    // The ladder: outgoing → process → pending → sent, each replay a skip.
+    let ladder = mint_sms_trace(&db.pool, "ladder@example.id", None).await;
+    assert_eq!(
+        svc.set_process(ladder).await.expect("process"),
+        TraceTransition::Moved
+    );
+    assert_eq!(
+        svc.set_pending(ladder).await.expect("pending"),
+        TraceTransition::Moved
+    );
+    assert_eq!(
+        svc.set_sent(ladder).await.expect("sent"),
+        TraceTransition::Moved
+    );
+    let sent_at: Option<chrono::DateTime<chrono::Utc>> =
+        sqlx::query_scalar("SELECT sent_datetime FROM mailing.mailing_traces WHERE id = $1")
+            .bind(ladder)
+            .fetch_one(&db.pool)
+            .await
+            .expect("sent stamp");
+    assert!(sent_at.is_some(), "set_sent stamps sent_datetime on the sms channel too");
+    // Everything below sent skips — the rank guard holds for the sms edges.
+    assert_eq!(
+        svc.set_bounced_sms(ladder, "sms_invalid_destination", None)
+            .await
+            .expect("bounce below sent"),
+        TraceTransition::Skipped
+    );
+
+    // A non-SMS failure code is refused at the verb door — never cast.
+    let strict = mint_sms_trace(&db.pool, "strict@example.id", Some("u-strict")).await;
+    let refused = svc
+        .set_bounced_sms(strict, "mail_bounce", None)
+        .await
+        .expect_err("mail_bounce must be refused by the sms verb");
+    assert_eq!(refused.code(), "invalid_input");
+
+    // The gateway seam stamps once: a second attach never overwrites.
+    assert_eq!(
+        svc.attach_sms_uuid(ladder, "u-ladder").await.expect("attach"),
+        TraceTransition::Moved
+    );
+    assert_eq!(
+        svc.attach_sms_uuid(ladder, "u-other").await.expect("second"),
+        TraceTransition::Skipped
+    );
+    let seam: String =
+        sqlx::query_scalar("SELECT sms_uuid FROM mailing.mailing_traces WHERE id = $1")
+            .bind(ladder)
+            .fetch_one(&db.pool)
+            .await
+            .expect("seam");
+    assert_eq!(seam, "u-ladder");
+
+    // Unknown ids are Missing on the sms verbs too.
+    assert_eq!(
+        svc.set_process(Uuid::new_v4()).await.expect("unknown"),
+        TraceTransition::Missing
+    );
+    db.dispose().await;
+}
+
+#[tokio::test]
+async fn sms_bounce_is_channel_pure_and_never_feeds_the_mail_auto_blacklist() {
+    let Some(db) = TestDb::new("smspure").await else {
+        return skipped("smspure");
+    };
+    let svc = TraceWriteService::new(db.pool.clone());
+    let bounced = mint_sms_trace(&db.pool, "phone-holder@example.id", Some("u-pure")).await;
+
+    assert_eq!(
+        svc.set_bounced_sms(bounced, "sms_invalid_destination", Some("dead number"))
+            .await
+            .expect("sms bounce"),
+        TraceTransition::Moved
+    );
+    let (status, ftype, reason, opened): (String, String, Option<String>, Option<chrono::DateTime<chrono::Utc>>) =
+        sqlx::query_as(
+            r#"SELECT trace_status::text, failure_type::text, failure_reason, open_datetime
+               FROM mailing.mailing_traces WHERE id = $1"#,
+        )
+        .bind(bounced)
+        .fetch_one(&db.pool)
+        .await
+        .expect("bounce row");
+    assert_eq!(status, "bounce");
+    assert_eq!(ftype, "sms_invalid_destination", "the code rides verbatim");
+    assert_eq!(reason.as_deref(), Some("dead number"));
+    assert!(
+        opened.is_none(),
+        "an sms bounce is not a mail touch — open_datetime stays unstamped"
+    );
+
+    // The isolation proof, with a POSITIVE CONTROL so the negative is
+    // meaningful: the auto-blacklist sweep enrolls only a PATTERN of mail
+    // bounces (>= max_bounces spread > spread_days — one incidental bounce
+    // never blacklists), so the control is two mail_bounce traces for one
+    // address, created a week apart, against thresholds (2, 7 days). The
+    // SMS bounce — same trace_status, different failure vocabulary — must
+    // NOT enroll under the same thresholds.
+    let control_email = "mail-bounce-control@example.id";
+    let control_old = Uuid::new_v4();
+    sqlx::query(
+        r#"INSERT INTO mailing.mailing_traces
+               (id, trace_type, mailing_id, recipient_model, recipient_id,
+                recipient_email, trace_status, failure_type)
+           VALUES ($1, 'mail', $2, 'mailing_contact', $3, $4, 'bounce', 'mail_bounce')"#,
+    )
+    .bind(control_old)
+    .bind(Uuid::new_v4())
+    .bind(Uuid::new_v4())
+    .bind(control_email)
+    .execute(&db.pool)
+    .await
+    .expect("old control bounce");
+    // The audit trigger stamps created_at UNCONDITIONALLY on INSERT, so the
+    // backdate rides an UPDATE (which only refreshes updated_at).
+    sqlx::query(
+        r#"UPDATE mailing.mailing_traces
+           SET metadata = jsonb_build_object('created_at',
+                                             to_jsonb(now() - interval '8 days'))
+           WHERE id = $1"#,
+    )
+    .bind(control_old)
+    .execute(&db.pool)
+    .await
+    .expect("backdate control bounce");
+    let mail_control = mint_outgoing(&db.pool, control_email).await;
+    assert_eq!(
+        svc.set_bounced(mail_control).await.expect("control"),
+        TraceTransition::Moved
+    );
+    sqlx::query(
+        r#"INSERT INTO mailing.mailings (id, subject, body_html, email_from, state)
+           VALUES ($1, 'Purity', '<p>x</p>', 'c@example.id', 'done')"#,
+    )
+    .bind(Uuid::new_v4())
+    .execute(&db.pool)
+    .await
+    .expect("mailing");
+    let engine =
+        backbone_mailing::application::service::mailing_write_service::MailingWriteService::new(
+            db.pool.clone(),
+        )
+        .with_auto_blacklist_config(
+            backbone_mailing::application::service::mailing_write_service::AutoBlacklistConfig {
+                max_bounces: 2,
+                window_weeks: 13,
+                spread_days: 7,
+            },
+        );
+    let out = engine.send_queue_sweep().await.expect("sweep");
+    assert_eq!(
+        out.auto_blacklisted, 1,
+        "the mail-bounce control pattern (2 bounces, 8 days apart) enrolls"
+    );
+    let sms_enrolled: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM messaging.mail_blacklists WHERE email = 'phone-holder@example.id'",
+    )
+    .fetch_one(&db.pool)
+    .await
+    .expect("sms blacklist probe");
+    assert_eq!(
+        sms_enrolled, 0,
+        "an sms bounce never enrolls an email blacklist row — channel purity holds at the DB"
+    );
+    db.dispose().await;
+}

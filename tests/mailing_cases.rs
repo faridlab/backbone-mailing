@@ -635,3 +635,70 @@ async fn retry_failed_soft_deletes_and_requeues() {
     assert_eq!(err.http_status(), 422);
     db.dispose().await;
 }
+
+/// Seed one sms-type draft mailing directly. `body` is passed verbatim so a
+/// case can hand the verb a blank body (the DB CHECK only rejects NULL, so
+/// the blank case proves the TYPED refusal, not the backstop).
+async fn seed_sms_draft(pool: &sqlx::PgPool, marker: &str, body: &str) -> Uuid {
+    let id = Uuid::new_v4();
+    sqlx::query(
+        r#"INSERT INTO mailing.mailings
+               (id, subject, body_html, body_plaintext, email_from, state,
+                mailing_type, mailing_domain)
+           VALUES ($1, $2, '<p>x</p>', $3, 'c@example.id', 'draft',
+                   'sms', '[]'::jsonb)"#,
+    )
+    .bind(id)
+    .bind(marker)
+    .bind(body)
+    .execute(pool)
+    .await
+    .expect("sms draft seed");
+    id
+}
+
+#[tokio::test]
+async fn launch_refuses_a_blank_bodied_sms_mailing_with_the_typed_error() {
+    let Some(db) = TestDb::new("sms-blank-launch").await else {
+        return skipped("sms-blank-launch");
+    };
+    for blank in ["", "   "] {
+        let id = seed_sms_draft(&db.pool, "blank-body-sms", blank).await;
+        let svc = MailingWriteService::new(db.pool.clone());
+        let err = svc.launch(id, "immediate", None).await.expect_err("must refuse");
+        match &err {
+            MailingWriteError::Invalid(msg) => {
+                assert!(msg.contains("body_plaintext"), "message names the missing body: {msg}");
+            }
+            other => panic!("expected Invalid, got {other:?}"),
+        }
+        assert_eq!(err.http_status(), 422);
+        // Zero row effects: the refusal lands before the queue edge.
+        let state: String =
+            sqlx::query_scalar("SELECT state::text FROM mailing.mailings WHERE id = $1")
+                .bind(id)
+                .fetch_one(&db.pool)
+                .await
+                .expect("state");
+        assert_eq!(state, "draft", "a refused launch leaves the draft untouched");
+    }
+    db.dispose().await;
+}
+
+#[tokio::test]
+async fn launch_queues_a_bodied_sms_mailing() {
+    let Some(db) = TestDb::new("sms-body-launch").await else {
+        return skipped("sms-body-launch");
+    };
+    let id = seed_sms_draft(&db.pool, "bodied-sms", "flash sale today").await;
+    let svc = MailingWriteService::new(db.pool.clone());
+    svc.launch(id, "immediate", None).await.expect("launch");
+    let state: String =
+        sqlx::query_scalar("SELECT state::text FROM mailing.mailings WHERE id = $1")
+            .bind(id)
+            .fetch_one(&db.pool)
+            .await
+            .expect("state");
+    assert_eq!(state, "in_queue");
+    db.dispose().await;
+}

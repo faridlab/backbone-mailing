@@ -28,13 +28,22 @@
 //!    services (`message_post` with empty recipients + `enqueue`), then
 //!    attach the mail row id onto the trace in a `commit_per_batch`
 //!    transaction shape;
-//! 6. complete the mailing (sent_date + kpi_mail_required on first send) or
-//!    leave it `sending` when the pass budget was exhausted (the next sweep
-//!    resumes through the seen-list skip);
+//! 6. complete the mailing — MAIL channel only, synchronously at walk end
+//!    (sent_date + kpi_mail_required on first send), or leave it `sending`
+//!    when the pass budget was exhausted (the next sweep resumes through
+//!    the seen-list skip). The SMS channel instead STAMPS the walk-complete
+//!    marker and leaves done to the delivery-tracker pump (step 10): after
+//!    the walk hands every recipient to the gateway, done is a delivery
+//!    question, and delivery verdicts arrive asynchronously;
 //! 7. reconcile settled SMTP verdicts onto outgoing traces (set_sent /
 //!    set_failed — one failure never fails the batch);
 //! 8. auto-blacklist sweep on the DATABASE clock;
-//! 9. A/B winner promotion for tests past promote_at with a done sibling.
+//! 9. A/B winner promotion for tests past promote_at with a done sibling;
+//! 10. SMS delivery-tracker pump — advance sms-type traces from their
+//!     tracker verdicts and infer done for walked-out sms mailings (lock
+//!     the row FOR UPDATE, re-check no transient trace remains under the
+//!     lock, then the state-guarded complete verb). Rides this same job:
+//!     no second cron.
 //!
 //! The orphan-repair arm (outgoing traces whose enqueue never completed)
 //! runs at the top of every drive, healing crash-between-mint-and-attach.
@@ -52,6 +61,7 @@ use crate::infrastructure::persistence::mailing_send_repository::{
     MailingSendRepository, ResolvedRecipient,
 };
 use crate::infrastructure::persistence::trace_repository::TraceRepository;
+use crate::application::service::sms_delivery_pump_service::SmsDeliveryPumpService;
 
 use backbone_mail::application::service::mail_queue_write_service::{
     MailQueueWriteService, MailQueueError,
@@ -282,6 +292,15 @@ pub struct SweepOutcome {
     pub reconcile_failed: usize,
     pub auto_blacklisted: u64,
     pub ab_promotions: usize,
+    /// SMS channel: walks whose last pass ended (the marker stamped here).
+    pub sms_walks_marked: usize,
+    /// SMS channel: traces advanced by a tracker verdict (step 10).
+    pub sms_traces_advanced: usize,
+    /// SMS channel: tracker verdicts that no-oped on the rank guard
+    /// (idempotent replay — restart, sweep re-entry, job overlap).
+    pub sms_trace_skips: usize,
+    /// SMS channel: mailings the pump flipped to done (step 10).
+    pub sms_mailings_completed: usize,
 }
 
 // ── the service ─────────────────────────────────────────────────────────────
@@ -296,6 +315,7 @@ pub struct MailingWriteService {
     events: Arc<dyn MailingEventSink>,
     messages: MessageWriteService,
     queue: MailQueueWriteService,
+    sms_pump: SmsDeliveryPumpService,
 }
 
 impl MailingWriteService {
@@ -303,6 +323,7 @@ impl MailingWriteService {
         Self {
             messages: MessageWriteService::new(pool.clone()),
             queue: MailQueueWriteService::new(pool.clone()),
+            sms_pump: SmsDeliveryPumpService::new(pool.clone()),
             pool,
             cfg: MailingSendConfig::default(),
             blacklist_cfg: AutoBlacklistConfig::default(),
@@ -446,6 +467,30 @@ impl MailingWriteService {
             }
         };
         let mut tx = self.pool.begin().await?;
+        // SMS mailings must carry a body at launch — refuse with the typed
+        // error before any queue effect (the DB CHECK stays as the raw-SQL
+        // backstop for paths that bypass this verb).
+        let launch_shape = MailingSendRepository::mailing_launch_shape(&mut tx, id).await?;
+        match launch_shape {
+            None => {
+                tx.rollback().await?;
+                return Err(MailingWriteError::NotFound(format!("mailing {id}")));
+            }
+            Some((mailing_type, body_plaintext)) => {
+                if mailing_type == "sms"
+                    && body_plaintext
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|b| !b.is_empty())
+                        .is_none()
+                {
+                    tx.rollback().await?;
+                    return Err(MailingWriteError::Invalid(format!(
+                        "sms mailing {id} needs body_plaintext before launch"
+                    )));
+                }
+            }
+        }
         let queued = MailingSendRepository::queue_mailing(
             &mut tx,
             id,
@@ -624,6 +669,17 @@ impl MailingWriteService {
         // (9) A/B winner promotion.
         self.promote_due_ab_tests(&mut out).await?;
 
+        // (10) SMS delivery-tracker pump: advance sms-type traces from
+        // tracker verdicts, then infer done for walked-out sms mailings
+        // (lock → re-check → complete). Rides this same job — no second
+        // cron; every step is idempotent, so overlap replays as skips.
+        {
+            let pumped = self.sms_pump.pump_once().await?;
+            out.sms_traces_advanced += pumped.traces_advanced;
+            out.sms_trace_skips += pumped.trace_skips;
+            out.sms_mailings_completed += pumped.mailings_completed;
+        }
+
         Ok(out)
     }
 
@@ -633,6 +689,43 @@ impl MailingWriteService {
         m: &ClaimedMailing,
         out: &mut SweepOutcome,
     ) -> Result<(), MailingWriteError> {
+        // Channel guard — FIRST, before any arm that could touch the mail
+        // queue. The mail walk below is the EMAIL channel's: it resolves an
+        // email audience and enqueues mail rows. An sms-type mailing must
+        // never be routed through it — that would email an sms audience
+        // (the wrong channel, the wrong addresses).
+        //
+        // Two sms shapes reach here, with opposite dispositions:
+        //  - WALKED OUT (the sms_walk_complete marker): the send work is
+        //    finished; done is now a delivery question owned by the
+        //    delivery-tracker pump (this sweep's step 10). Leaving the row
+        //    untouched is what keeps the inference restart-durable — a
+        //    sweep between walk-end and delivery-verdict completion must
+        //    neither re-drive it nor park it.
+        //  - NOT walked out: the sms send walk is not composed at this
+        //    seam; PARK loudly (visible in metadata.send_error,
+        //    retryable) rather than sending anything through the wrong
+        //    channel.
+        if m.mailing_type == "sms" {
+            if m.sms_walk_done {
+                return Ok(());
+            }
+            let mut tx = self.pool.begin().await?;
+            MailingSendRepository::park_mailing(
+                &mut tx,
+                m.id,
+                "sms-type mailing reached the mail send walk — the sms send walk is not composed at this seam",
+            )
+            .await?;
+            tx.commit().await?;
+            out.parked += 1;
+            tracing::warn!(
+                mailing_id = %m.id,
+                "sms mailing parked: the mail send walk refuses to route an sms audience"
+            );
+            return Ok(());
+        }
+
         // The orphan-repair arm: outgoing traces whose enqueue never
         // completed heal first (crash between mint and attach). The grace
         // interval keeps a CONCURRENT worker's in-flight mint→enqueue
@@ -948,8 +1041,22 @@ impl MailingWriteService {
         // flip is state-guarded: a concurrent worker that completed this
         // mailing first returns false, and only the worker that moved the
         // edge counts the completion.
+        //
+        // CHANNEL BRANCH: the synchronous completion is the MAIL channel's
+        // semantics (the last SMTP handoff is the last fact it will ever
+        // get). The SMS channel instead stamps the walk-complete marker:
+        // done becomes a delivery question, and the delivery-tracker pump
+        // (sweep step 10) closes the mailing when no transient trace
+        // remains — asynchronously, on the tracker's clock.
         if remaining > 0 {
             out.still_sending += 1;
+        } else if m.mailing_type == "sms" {
+            let mut tx = self.pool.begin().await?;
+            let marked = MailingSendRepository::mark_sms_walk_complete(&mut tx, m.id).await?;
+            tx.commit().await?;
+            if marked {
+                out.sms_walks_marked += 1;
+            }
         } else {
             let mut tx = self.pool.begin().await?;
             let flipped = MailingSendRepository::complete_mailing(&mut tx, m.id).await?;

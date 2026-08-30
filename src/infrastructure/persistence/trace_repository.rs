@@ -174,6 +174,42 @@ impl TraceRepository {
 
     // ── the seven set_* verbs (each a rank-guarded conditional UPDATE) ────────
 
+    /// `set_process` (SMS channel only) — outgoing → process: the delivery
+    /// tracker reports the channel is holding the message (queued at the
+    /// gateway before dispatch). Same one-conditional-UPDATE shape as the
+    /// mail verbs; the WHERE arm is exactly the declared edge's source set.
+    pub async fn set_process(conn: &mut PgConnection, trace_id: Uuid) -> Result<bool, sqlx::Error> {
+        Self::advance(
+            conn,
+            trace_id,
+            r#"UPDATE mailing.mailing_traces
+               SET trace_status = 'process'
+               WHERE id = $1
+                 AND trace_status = 'outgoing'
+                 AND (metadata->>'deleted_at') IS NULL"#,
+        )
+        .await
+    }
+
+    /// `set_pending` (SMS channel only) — [outgoing, process] → pending:
+    /// handed to the gateway, awaiting the delivery report (displays
+    /// 'Sent'). `outgoing` is a legal source because the pump observes at
+    /// sweep cadence — a tracker that already moved past 'process' advances
+    /// the trace in one compressed step, the same partial-order the upstream
+    /// monotonic table admits.
+    pub async fn set_pending(conn: &mut PgConnection, trace_id: Uuid) -> Result<bool, sqlx::Error> {
+        Self::advance(
+            conn,
+            trace_id,
+            r#"UPDATE mailing.mailing_traces
+               SET trace_status = 'pending'
+               WHERE id = $1
+                 AND trace_status IN ('outgoing', 'process')
+                 AND (metadata->>'deleted_at') IS NULL"#,
+        )
+        .await
+    }
+
     /// `set_sent` — from outgoing/process/pending; stamps `sent_datetime`
     /// (first stamp wins), clears the failure pair.
     pub async fn set_sent(conn: &mut PgConnection, trace_id: Uuid) -> Result<bool, sqlx::Error> {
@@ -218,6 +254,37 @@ impl TraceRepository {
                  AND (metadata->>'deleted_at') IS NULL"#,
         )
         .await
+    }
+
+    /// `set_bounced_sms` (SMS channel only) — [outgoing, process, pending] →
+    /// bounce with the SMS failure code carried VERBATIM. Channel purity is
+    /// the whole point of this verb's existence: it never writes
+    /// `mail_bounce` (the EMAIL auto-blacklist window's fact source scans
+    /// failure_type='mail_bounce' — an SMS bounce must not enroll a phone
+    /// recipient there) and never stamps open_datetime (an SMS bounce is not
+    /// a mail touch). The failure code must already be a member of
+    /// trace_failure_type — the pump whitelists before calling; a non-member
+    /// cast would abort the caller's transaction.
+    pub async fn set_bounced_sms(
+        conn: &mut PgConnection,
+        trace_id: Uuid,
+        failure_type: &str,
+        failure_reason: Option<&str>,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query(
+            r#"UPDATE mailing.mailing_traces
+               SET trace_status = 'bounce', failure_type = $2::trace_failure_type,
+                   failure_reason = $3
+               WHERE id = $1
+                 AND trace_status IN ('outgoing', 'process', 'pending')
+                 AND (metadata->>'deleted_at') IS NULL"#,
+        )
+        .bind(trace_id)
+        .bind(failure_type)
+        .bind(failure_reason)
+        .execute(&mut *conn)
+        .await
+        .map(|r| r.rows_affected() > 0)
     }
 
     /// `set_bounced` — sets failure_type='mail_bounce' (the auto-blacklist
@@ -316,6 +383,29 @@ impl TraceRepository {
         .map(|r| r.rows_affected() > 0)
     }
 
+    /// Stamp the trace's sms row link — the SMS twin of `attach_mail_id`:
+    /// the enqueued sms row's EXTERNAL uuid, conditional on NULL so a
+    /// replayed enqueue repair never overwrites a standing link. No DB
+    /// constraint either side; the delivery-tracker pump joins
+    /// messaging.sms_trackers through it read-only.
+    pub async fn attach_sms_uuid(
+        conn: &mut PgConnection,
+        trace_id: Uuid,
+        sms_uuid: &str,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query(
+            r#"UPDATE mailing.mailing_traces
+               SET sms_uuid = $2
+               WHERE id = $1 AND sms_uuid IS NULL
+                 AND (metadata->>'deleted_at') IS NULL"#,
+        )
+        .bind(trace_id)
+        .bind(sms_uuid)
+        .execute(&mut *conn)
+        .await
+        .map(|r| r.rows_affected() > 0)
+    }
+
     /// Stamp the RFC Message-ID (the future inbound reply/bounce match key).
     pub async fn set_message_id(
         conn: &mut PgConnection,
@@ -354,6 +444,9 @@ impl TraceRepository {
     /// the grace interval, a concurrent sweep driving the same mailing
     /// would "repair" traces the first worker is between mint and enqueue
     /// on RIGHT NOW — enqueueing them twice (two mail rows, two sends).
+    /// Mail-channel only by explicit filter: sms traces also carry a NULL
+    /// mail_id (their linkage is the sms_uuid seam), so without the filter
+    /// this arm would sweep them into the EMAIL enqueue.
     pub async fn outgoing_without_mail(
         conn: &mut PgConnection,
         mailing_id: Uuid,
@@ -363,6 +456,7 @@ impl TraceRepository {
             r#"SELECT id, recipient_id, recipient_email
                FROM mailing.mailing_traces
                WHERE mailing_id = $1 AND trace_status = 'outgoing'
+                 AND trace_type = 'mail'
                  AND mail_id IS NULL
                  AND (metadata->>'deleted_at') IS NULL
                  AND (metadata->>'created_at')::timestamptz
@@ -397,6 +491,65 @@ impl TraceRepository {
         .await
     }
 
+    /// The delivery-tracker pump's advance-pass input: live sms-type traces
+    /// still in a transient status, each joined to its delivery tracker by
+    /// the sms_uuid seam. Read-only cross-schema consumption — the same
+    /// precedent as `settled_mails_for_reconcile`'s messaging.mails join, in
+    /// the opposite direction: this side NEVER writes into messaging, the
+    /// tracker is simply the durable delivery fact.
+    ///
+    /// The tracker (not the sms queue row) is the join target because BOTH
+    /// verdict paths mirror it in their own transaction — the signed
+    /// delivery-report webhook AND the drainer's own outcome application —
+    /// and it survives sms-row GC (unique(sms_uuid)). An inner join is
+    /// therefore not a stuck-mailing risk: every sms-row enqueue mints the
+    /// tracker in the same transaction, so a live sms-type trace without a
+    /// tracker is a substrate invariant violation worth leaving visible.
+    pub async fn sms_traces_with_tracker_verdicts(
+        conn: &mut PgConnection,
+    ) -> Result<Vec<SmsTraceVerdict>, sqlx::Error> {
+        sqlx::query_as::<_, SmsTraceVerdict>(
+            r#"SELECT t.id AS trace_id,
+                      tr.state::text AS tracker_state,
+                      tr.failure_type::text AS failure_type,
+                      tr.failure_reason
+               FROM mailing.mailing_traces t
+               JOIN messaging.sms_trackers tr ON tr.sms_uuid = t.sms_uuid
+               WHERE t.trace_type = 'sms'
+                 AND t.trace_status IN ('outgoing', 'process', 'pending')
+                 AND (t.metadata->>'deleted_at') IS NULL
+               ORDER BY t.id
+               LIMIT 5000"#,
+        )
+        .fetch_all(&mut *conn)
+        .await
+    }
+
+    /// The done-inference remaining-check, run UNDER the mailing-row lock:
+    /// live traces of this mailing still in a transient status. `outgoing`
+    /// counts as remaining on purpose — the pump observes at sweep cadence,
+    /// so a trace the pump has not visited yet is indistinguishable from one
+    /// the channel never dispatched; closing on it would be premature done.
+    /// (Upstream's check counts process-only because its traces are written
+    /// synchronously in the same pass; this port's pump is asynchronous, so
+    /// the transient set is the honest remaining set.)
+    pub async fn count_transient_sms_traces(
+        conn: &mut PgConnection,
+        mailing_id: Uuid,
+    ) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar::<_, i64>(
+            r#"SELECT count(*)
+               FROM mailing.mailing_traces
+               WHERE mailing_id = $1
+                 AND trace_type = 'sms'
+                 AND trace_status IN ('outgoing', 'process', 'pending')
+                 AND (metadata->>'deleted_at') IS NULL"#,
+        )
+        .bind(mailing_id)
+        .fetch_one(&mut *conn)
+        .await
+    }
+
     /// One live trace by id (the verbs' row probe).
     pub async fn find_live(
         conn: &mut PgConnection,
@@ -405,6 +558,25 @@ impl TraceRepository {
         sqlx::query_as::<_, TraceRow>(
             r#"SELECT id, trace_status::text AS trace_status, failure_type::text AS failure_type,
                       sent_datetime, open_datetime, reply_datetime, links_click_datetime, mail_id
+               FROM mailing.mailing_traces
+               WHERE id = $1 AND (metadata->>'deleted_at') IS NULL"#,
+        )
+        .bind(trace_id)
+        .fetch_optional(&mut *conn)
+        .await
+    }
+
+    /// One live trace by id, in the public trace-route projection — the
+    /// fields the `/r/:code/m/:trace` family needs: the consistency check's
+    /// campaign half (the trace's denormalized copy), the unsubscribe leg's
+    /// mailing + recipient anchor.
+    pub async fn find_route_trace(
+        conn: &mut PgConnection,
+        trace_id: Uuid,
+    ) -> Result<Option<RouteTraceRow>, sqlx::Error> {
+        sqlx::query_as::<_, RouteTraceRow>(
+            r#"SELECT id, trace_status::text AS trace_status, mailing_id, campaign_id,
+                      recipient_email
                FROM mailing.mailing_traces
                WHERE id = $1 AND (metadata->>'deleted_at') IS NULL"#,
         )
@@ -452,6 +624,19 @@ impl TraceRepository {
     }
 }
 
+/// The delivery-tracker pump's advance-pass row: one transient sms-type
+/// trace with its tracker's verdict. `failure_type` arrives as the
+/// NotificationFailureType name; the pump maps it into the trace failure
+/// vocabulary before any verb call (a non-member cast would abort the
+/// caller's transaction, so the whitelist lives in the service).
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct SmsTraceVerdict {
+    pub trace_id: Uuid,
+    pub tracker_state: String,
+    pub failure_type: Option<String>,
+    pub failure_reason: Option<String>,
+}
+
 /// The trace-row projection the write verbs return to callers.
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct TraceRow {
@@ -463,4 +648,17 @@ pub struct TraceRow {
     pub reply_datetime: Option<DateTime<Utc>>,
     pub links_click_datetime: Option<DateTime<Utc>>,
     pub mail_id: Option<Uuid>,
+}
+
+/// The public trace-route projection: everything the `/r/:code/m/:trace`
+/// family reads — the consistency half (`campaign_id`, the denormalized
+/// copy minted with the trace) and the unsubscribe anchors (`mailing_id`
+/// for the targeted-audience walk, `recipient_email` for the opt-out).
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct RouteTraceRow {
+    pub id: Uuid,
+    pub trace_status: String,
+    pub mailing_id: Uuid,
+    pub campaign_id: Option<Uuid>,
+    pub recipient_email: String,
 }

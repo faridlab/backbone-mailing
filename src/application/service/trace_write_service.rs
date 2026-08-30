@@ -70,6 +70,79 @@ impl TraceWriteService {
         Ok(row)
     }
 
+    /// `set_process` (SMS channel only) — the delivery-tracker pump saw the
+    /// channel hold the message (tracker 'process': queued at the gateway
+    /// before dispatch). Mail-channel rows never match: their rank never
+    /// leaves outgoing before a transport verdict.
+    pub async fn set_process(&self, trace_id: Uuid) -> Result<TraceTransition, TraceWriteError> {
+        let mut tx = self.pool.begin().await?;
+        if TraceRepository::find_live(&mut tx, trace_id).await?.is_none() {
+            tx.commit().await?;
+            return Ok(TraceTransition::Missing);
+        }
+        let moved = TraceRepository::set_process(&mut tx, trace_id).await?;
+        tx.commit().await?;
+        Ok(classify(moved))
+    }
+
+    /// `set_pending` (SMS channel only) — handed to the gateway, awaiting
+    /// the delivery report (displays 'Sent'). A tracker already past
+    /// 'process' advances the trace in one compressed step from outgoing.
+    pub async fn set_pending(&self, trace_id: Uuid) -> Result<TraceTransition, TraceWriteError> {
+        let mut tx = self.pool.begin().await?;
+        if TraceRepository::find_live(&mut tx, trace_id).await?.is_none() {
+            tx.commit().await?;
+            return Ok(TraceTransition::Missing);
+        }
+        let moved = TraceRepository::set_pending(&mut tx, trace_id).await?;
+        tx.commit().await?;
+        Ok(classify(moved))
+    }
+
+    /// `set_bounced_sms` (SMS channel only) — the delivery report's bounce
+    /// verdict with the SMS failure code carried verbatim. Channel-pure by
+    /// construction: this verb can never write `mail_bounce` (the email
+    /// auto-blacklist's fact source) and never stamps open_datetime. The
+    /// caller (the delivery-tracker pump) whitelists the code against the
+    /// trace failure vocabulary before calling — an unknown code is refused
+    /// here rather than surfacing as a cast failure inside the verb.
+    pub async fn set_bounced_sms(
+        &self,
+        trace_id: Uuid,
+        failure_type: &str,
+        failure_reason: Option<&str>,
+    ) -> Result<TraceTransition, TraceWriteError> {
+        if !is_sms_failure_code(failure_type) {
+            return Err(TraceWriteError::Invalid(format!(
+                "not an SMS failure code: {failure_type}"
+            )));
+        }
+        let mut tx = self.pool.begin().await?;
+        if TraceRepository::find_live(&mut tx, trace_id).await?.is_none() {
+            tx.commit().await?;
+            return Ok(TraceTransition::Missing);
+        }
+        let moved =
+            TraceRepository::set_bounced_sms(&mut tx, trace_id, failure_type, failure_reason)
+                .await?;
+        tx.commit().await?;
+        Ok(classify(moved))
+    }
+
+    /// Stamp the enqueued sms row's external uuid (the SMS twin of the
+    /// mail_id seam) — conditional on NULL, exactly like the mail link: a
+    /// replayed enqueue repair never overwrites a standing link.
+    pub async fn attach_sms_uuid(
+        &self,
+        trace_id: Uuid,
+        sms_uuid: &str,
+    ) -> Result<TraceTransition, TraceWriteError> {
+        let mut tx = self.pool.begin().await?;
+        let moved = TraceRepository::attach_sms_uuid(&mut tx, trace_id, sms_uuid).await?;
+        tx.commit().await?;
+        Ok(classify(moved))
+    }
+
     /// `set_sent` — the transport's acceptance stamp.
     pub async fn set_sent(&self, trace_id: Uuid) -> Result<TraceTransition, TraceWriteError> {
         let mut tx = self.pool.begin().await?;
@@ -182,4 +255,34 @@ fn classify(moved: bool) -> TraceTransition {
     } else {
         TraceTransition::Skipped
     }
+}
+
+/// The SMS transport-verdict codes that are members of trace_failure_type
+/// (the vocabulary schema/models/trace.model.yaml declares and the overlay
+/// migration adds). The delivery-tracker pump maps tracker verdicts onto
+/// this set before calling `set_bounced_sms` — a code outside it (the mail
+/// channel's, or the tracker's unclassified `unknown`) never reaches a verb;
+/// the pump substitutes the channel-appropriate default instead, keeping
+/// every failure code written to a trace a declared member by construction.
+pub const SMS_FAILURE_CODES: &[&str] = &[
+    "sms_number_missing",
+    "sms_number_format",
+    "sms_country_not_supported",
+    "sms_registration_needed",
+    "sms_credit",
+    "sms_server",
+    "sms_acc",
+    "sms_blacklist",
+    "sms_duplicate",
+    "sms_optout",
+    "sms_expired",
+    "sms_invalid_destination",
+    "sms_not_allowed",
+    "sms_not_delivered",
+    "sms_rejected",
+];
+
+/// Membership probe for the SMS failure vocabulary above.
+pub fn is_sms_failure_code(code: &str) -> bool {
+    SMS_FAILURE_CODES.contains(&code)
 }

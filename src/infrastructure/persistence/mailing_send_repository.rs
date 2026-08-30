@@ -103,6 +103,15 @@ pub struct ClaimedMailing {
     pub reply_to: Option<String>,
     pub mailing_domain: serde_json::Value,
     pub target_model: String,
+    /// Channel selector ('mail' | 'sms') — the sweep branches on it: mail
+    /// completes synchronously at walk end; sms marks the walk complete and
+    /// leaves done to the delivery-tracker pump.
+    pub mailing_type: String,
+    /// Whether the sms walk already ended (the durable `sms_walk_complete`
+    /// metadata marker). A walked-out sms mailing is NOT send work: the
+    /// drive leaves it untouched and the delivery-tracker pump (the sweep's
+    /// last step) owns its completion.
+    pub sms_walk_done: bool,
     pub use_exclusion_list: bool,
     pub campaign_id: Option<Uuid>,
     pub ab_testing_enabled: bool,
@@ -131,7 +140,10 @@ impl MailingSendRepository {
     ) -> Result<Vec<ClaimedMailing>, sqlx::Error> {
         sqlx::query_as::<_, ClaimedMailing>(
             r#"SELECT id, subject, body_html, email_from, reply_to, mailing_domain,
-                      target_model::text AS target_model, use_exclusion_list,
+                      target_model::text AS target_model,
+                      mailing_type::text AS mailing_type,
+                      (metadata ? 'sms_walk_complete') AS sms_walk_done,
+                      use_exclusion_list,
                       campaign_id, ab_testing_enabled, ab_testing_pc, ab_test_id,
                       state::text AS state
                FROM mailing.mailings
@@ -221,6 +233,93 @@ impl MailingSendRepository {
         .execute(&mut *conn)
         .await
         .map(|r| r.rows_affected() > 0)
+    }
+
+    /// The SMS channel's walk-end marker: the send walk finished its last
+    /// pass (every trace minted, every enqueue handed to the channel), so
+    /// DONE is now purely a delivery question — the delivery-tracker pump
+    /// closes the mailing when no transient trace remains. Guarded metadata
+    /// stamp, not a state move: the mailing STAYS `sending` (the machine's
+    /// `sending → done` edge stays reserved for the state-guarded complete
+    /// verb), and the marker is idempotent — a replayed sweep pass or a
+    /// concurrent walk end stamps nothing new (the `NOT metadata ?
+    /// 'sms_walk_complete'` arm matches zero rows).
+    ///
+    /// This marker is what makes premature-done impossible: the pump only
+    /// ever considers mailings whose walk ended, so pass-budgeted audiences
+    /// (traces minted across several sweeps) and freshly minted outgoing
+    /// traces never look "already done" to the inference.
+    pub async fn mark_sms_walk_complete(
+        conn: &mut PgConnection,
+        id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query(
+            r#"UPDATE mailing.mailings
+               SET metadata = metadata || jsonb_build_object(
+                       'sms_walk_complete', 'true'::jsonb,
+                       'sms_walk_completed_at', to_jsonb(now()))
+               WHERE id = $1
+                 AND state = 'sending'
+                 AND NOT metadata ? 'sms_walk_complete'
+                 AND (metadata->>'deleted_at') IS NULL"#,
+        )
+        .bind(id)
+        .execute(&mut *conn)
+        .await
+        .map(|r| r.rows_affected() > 0)
+    }
+
+    /// The delivery-tracker pump's done-inference candidates: sms-type
+    /// mailings whose walk ended (the marker above) and which are not
+    /// parked on a send error. Read WITHOUT a lock here — the per-candidate
+    /// re-check under `lock_mailing_for_done` is what makes the inference
+    /// race-free; this scan only decides who is worth locking.
+    pub async fn sms_done_inference_candidates(
+        conn: &mut PgConnection,
+        limit: i64,
+    ) -> Result<Vec<Uuid>, sqlx::Error> {
+        sqlx::query_scalar::<_, Uuid>(
+            r#"SELECT id
+               FROM mailing.mailings
+               WHERE mailing_type = 'sms'
+                 AND state = 'sending'
+                 AND metadata->>'sms_walk_complete' = 'true'
+                 AND NOT metadata ? 'send_error'
+                 AND (metadata->>'deleted_at') IS NULL
+               ORDER BY (metadata->>'created_at') NULLS LAST, id
+               LIMIT $1"#,
+        )
+        .bind(limit)
+        .fetch_all(&mut *conn)
+        .await
+    }
+
+    /// Lock ONE done-inference candidate `FOR UPDATE` under its full
+    /// candidacy predicate — the claim_due_mailings precedent applied to
+    /// the completion edge: two pump passes (or a pump racing the sweep's
+    /// own last-trace completion) serialize here, and the SECOND locker
+    /// re-runs the remaining-count under the lock, sees the row already
+    /// `done`, matches zero rows, and no-ops. The lock is held across the
+    /// remaining-check + the complete verb and released at commit — never
+    /// longer.
+    pub async fn lock_mailing_for_done(
+        conn: &mut PgConnection,
+        id: Uuid,
+    ) -> Result<Option<Uuid>, sqlx::Error> {
+        sqlx::query_scalar::<_, Uuid>(
+            r#"SELECT id
+               FROM mailing.mailings
+               WHERE id = $1
+                 AND mailing_type = 'sms'
+                 AND state = 'sending'
+                 AND metadata->>'sms_walk_complete' = 'true'
+                 AND NOT metadata ? 'send_error'
+                 AND (metadata->>'deleted_at') IS NULL
+               FOR UPDATE"#,
+        )
+        .bind(id)
+        .fetch_optional(&mut *conn)
+        .await
     }
 
     /// The complete-empty edge: audience resolved to zero recipients —
@@ -386,6 +485,23 @@ impl MailingSendRepository {
         }
     }
 
+    /// The launch pre-check's input: a live mailing's channel + SMS body
+    /// (the launch verb refuses an sms mailing without a usable body —
+    /// the typed refusal ahead of the DB CHECK backstop).
+    pub async fn mailing_launch_shape(
+        conn: &mut PgConnection,
+        id: Uuid,
+    ) -> Result<Option<(String, Option<String>)>, sqlx::Error> {
+        sqlx::query_as::<_, (String, Option<String>)>(
+            r#"SELECT mailing_type::text, body_plaintext
+               FROM mailing.mailings
+               WHERE id = $1 AND (metadata->>'deleted_at') IS NULL"#,
+        )
+        .bind(id)
+        .fetch_optional(&mut *conn)
+        .await
+    }
+
     /// One live mailing by id (the verbs' probe).
     pub async fn find_live_state(
         conn: &mut PgConnection,
@@ -393,6 +509,24 @@ impl MailingSendRepository {
     ) -> Result<Option<(Uuid, String, Option<DateTime<Utc>>)>, sqlx::Error> {
         sqlx::query_as::<_, (Uuid, String, Option<DateTime<Utc>>)>(
             r#"SELECT id, state::text, schedule_date
+               FROM mailing.mailings
+               WHERE id = $1 AND (metadata->>'deleted_at') IS NULL"#,
+        )
+        .bind(id)
+        .fetch_optional(&mut *conn)
+        .await
+    }
+
+    /// A live mailing's targeting domain (the raw json the unsubscribe leg
+    /// re-parses for its audience terms). None when the mailing is gone or
+    /// soft-deleted — the caller refuses loudly, it never guesses an
+    /// audience set.
+    pub async fn find_live_mailing_domain(
+        conn: &mut PgConnection,
+        id: Uuid,
+    ) -> Result<Option<serde_json::Value>, sqlx::Error> {
+        sqlx::query_scalar::<_, serde_json::Value>(
+            r#"SELECT mailing_domain
                FROM mailing.mailings
                WHERE id = $1 AND (metadata->>'deleted_at') IS NULL"#,
         )

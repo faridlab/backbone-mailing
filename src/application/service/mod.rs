@@ -20,7 +20,12 @@ pub mod mailing_filter_service;
 pub mod ab_test_write_service;
 pub mod mailing_stats_read_service;
 pub mod mailing_write_service;
+pub mod sms_delivery_pump_service;
+pub mod sms_stop_service;
+pub mod sms_suppression_service;
 pub mod subscription_write_service;
+pub mod trace_click_ports;
+pub mod trace_route_service;
 pub mod trace_write_service;
 // END CUSTOM
 
@@ -40,5 +45,19 @@ pub use mailing_write_service::{
     MailingWriteError, MailingWriteService, PartyRecipientResolver, SweepOutcome, TracingEventSink,
 };
 pub use subscription_write_service::{SubscriptionWriteError, SubscriptionWriteService};
+pub use sms_delivery_pump_service::{SmsDeliveryPumpService, SmsPumpOutcome};
+pub use trace_click_ports::{
+    CannedTraceClick, CodeAttribution, RefusingTraceClick, ResolvedClick, TraceClickError,
+    TraceClickPort, TraceClickSlot,
+};
+pub use trace_route_service::{AudienceOptOut, TraceRouteError, TraceRouteService};
 pub use trace_write_service::{TraceTransition, TraceWriteError, TraceWriteService};
+pub use sms_stop_service::{
+    is_stop_reply_keyword, validate_stop_code, SmsStopError, SmsStopService, StopCodeError,
+    StopReplyOutcome, STOP_CODE_MAX_LEN, STOP_CODE_MIN_LEN,
+};
+pub use sms_suppression_service::{
+    ClaimedSmsContext, PhoneRecipient, SmsSuppressionError, SmsSuppressionService, Suppressed,
+    SuppressionOutcome, SMS_BLACKLIST_FAILURE_TYPE,
+};
 // END CUSTOM

@@ -17,13 +17,13 @@ path = "src/lib.rs"
 # or `rev = "<commit-sha>"`. Cargo dedupes the git fetch — the repo is only
 # cloned once even though four crates reference it.
 # -----------------------------------------------------------------------------
-backbone-core = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.9", features = ["postgres"] }
-backbone-orm = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.9" }
-backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.9" }
-backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.9" }
+backbone-core = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.11", features = ["postgres"] }
+backbone-orm = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.11" }
+backbone-auth = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.11" }
+backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.11" }
 # The public trace-route family (pixel + click) is throttled at middleware
 # (ADR-0019 action_link-class routes).
-backbone-rate-limit = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.9" }
+backbone-rate-limit = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.11" }
 
 # Sibling modules consumed through their public service surfaces: mail owns
 # the outgoing queue the send engine enqueues into (plus the email blacklist).
@@ -102,4 +102,4 @@ jsonwebtoken = "9.3"
 # Test-only: the send engine enqueues through backbone-mail's public services,
 # which stage outbox bus events into messaging.outbox_events — a table the
 # outbox crate owns and migrates itself (the test harness runs that migration).
-backbone-outbox = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.9" }
+backbone-outbox = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.11" }

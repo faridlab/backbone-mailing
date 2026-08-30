@@ -890,7 +890,7 @@ dependencies = [
 [[package]]
 name = "backbone-auth"
 version = "2.0.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.9#b0bca5c8571cffce00cef6db03e3f7f224195bcd"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.11#5767679d53eb92833319fb5bde190f620d8d250a"
 dependencies = [
  "anyhow",
  "argon2",
@@ -914,7 +914,7 @@ dependencies = [
 [[package]]
 name = "backbone-core"
 version = "2.0.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.9#b0bca5c8571cffce00cef6db03e3f7f224195bcd"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.11#5767679d53eb92833319fb5bde190f620d8d250a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -941,7 +941,7 @@ dependencies = [
 [[package]]
 name = "backbone-jobs"
 version = "0.1.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.9#b0bca5c8571cffce00cef6db03e3f7f224195bcd"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.11#5767679d53eb92833319fb5bde190f620d8d250a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -968,7 +968,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-mail"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-mailing"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1053,7 +1053,7 @@ dependencies = [
 [[package]]
 name = "backbone-messaging"
 version = "2.0.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.9#b0bca5c8571cffce00cef6db03e3f7f224195bcd"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.11#5767679d53eb92833319fb5bde190f620d8d250a"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1068,7 +1068,7 @@ dependencies = [
 [[package]]
 name = "backbone-orm"
 version = "2.0.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.9#b0bca5c8571cffce00cef6db03e3f7f224195bcd"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.11#5767679d53eb92833319fb5bde190f620d8d250a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1087,7 +1087,7 @@ dependencies = [
 [[package]]
 name = "backbone-outbox"
 version = "0.2.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.9#b0bca5c8571cffce00cef6db03e3f7f224195bcd"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.11#5767679d53eb92833319fb5bde190f620d8d250a"
 dependencies = [
  "chrono",
  "serde",
@@ -1100,7 +1100,7 @@ dependencies = [
 [[package]]
 name = "backbone-queue"
 version = "2.0.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.9#b0bca5c8571cffce00cef6db03e3f7f224195bcd"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.11#5767679d53eb92833319fb5bde190f620d8d250a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1126,7 +1126,7 @@ dependencies = [
 [[package]]
 name = "backbone-rate-limit"
 version = "2.0.0"
-source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.9#b0bca5c8571cffce00cef6db03e3f7f224195bcd"
+source = "git+https://github.com/faridlab/backbone-framework?tag=v2.7.11#5767679d53eb92833319fb5bde190f620d8d250a"
 dependencies = [
  "anyhow",
  "async-trait",

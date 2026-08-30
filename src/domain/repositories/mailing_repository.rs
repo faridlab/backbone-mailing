@@ -47,6 +47,7 @@ pub struct MailingFilter {
     pub subject: Option<String>,
     pub preview: Option<String>,
     pub body_html: Option<String>,
+    pub body_plaintext: Option<String>,
     pub email_from: Option<String>,
     pub reply_to: Option<String>,
     pub keep_archives: Option<bool>,
@@ -67,7 +68,7 @@ pub struct MailingFilter {
 impl MailingFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.subject.is_some() || self.preview.is_some() || self.body_html.is_some() || self.email_from.is_some() || self.reply_to.is_some() || self.keep_archives.is_some() || self.state.is_some() || self.schedule_type.is_some() || self.mailing_type.is_some() || self.target_model.is_some() || self.use_exclusion_list.is_some() || self.campaign_id.is_some() || self.medium_id.is_some() || self.source_id.is_some() || self.user_id.is_some() || self.ab_testing_enabled.is_some() || self.ab_test_id.is_some() || self.kpi_mail_required.is_some()
+        self.subject.is_some() || self.preview.is_some() || self.body_html.is_some() || self.body_plaintext.is_some() || self.email_from.is_some() || self.reply_to.is_some() || self.keep_archives.is_some() || self.state.is_some() || self.schedule_type.is_some() || self.mailing_type.is_some() || self.target_model.is_some() || self.use_exclusion_list.is_some() || self.campaign_id.is_some() || self.medium_id.is_some() || self.source_id.is_some() || self.user_id.is_some() || self.ab_testing_enabled.is_some() || self.ab_test_id.is_some() || self.kpi_mail_required.is_some()
     }
 }
 

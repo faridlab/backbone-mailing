@@ -69,4 +69,3 @@ impl Seeder for SeedMailingAudienceSeeder {
 // <<< CUSTOM SEED DATA START >>>
 // Add custom seed data methods here
 // <<< CUSTOM SEED DATA END >>>
-

@@ -26,6 +26,16 @@
 #    keep_archives=false). Upstream names it mail_mail_id_int because their
 #    PK is an int; backbone ids are uuids, so it is named plainly mail_id
 #    (recorded rename).
+#  - THE SMS CHANNEL rides the SAME trace entity, never a second table:
+#    trace_type carries the channel, sms_uuid is the gateway seam (keyed on
+#    messaging.sms.uuid, the recorded rename vs Odoo's sms_id_int row-id
+#    mirror — the substrate's tracker is uuid-decoupled and SURVIVES the
+#    gateway's terminal-row GC, so a row-id mirror would dangle exactly when
+#    the delivery-tracker pump needs it), and recipient_phone is the
+#    canonical E.164 twin of recipient_email (mail traces leave it NULL; the
+#    hardening CHECK owns the format invariant). SMS failure vocabulary
+#    mirrors the mail NotificationFailureType keys verbatim minus the
+#    bridge-module-bound twilio_* codes.
 #  - recipient anchor is (recipient_model, recipient_id, recipient_email):
 #    recipient_id is NOT NULL by column constraint (upstream's only hard DB
 #    guard on this model, kept); recipient_email is the normalized join key
@@ -51,7 +61,7 @@ models:
         attributes: ["@required", "@default(mail)"]
         lifecycle:
           shape: inert
-        description: "Channel — the single value 'mail' here; the SMS overlay adds 'sms' and drives the already-declared process/pending statuses."
+        description: "Channel — 'mail' traces ride the mail queue's outcome reconcile; 'sms' traces carry the sms_uuid seam and are driven by the delivery-tracker pump through the process/pending statuses this same machine already declares."
       is_test_trace:
         type: boolean
         attributes: ["@default(false)"]
@@ -80,6 +90,14 @@ models:
         type: uuid?
         attributes: ["@foreign_key(messaging.Mail.traces)", "@exclude_from_foreign_key_check", "@indexed"]
         description: "The enqueued mail row # logical FK messaging.Mail.id, NO DB constraint — the trace SURVIVES queue-row GC (the mirrored mail_mail_id_int seam; named plainly because backbone ids are uuids). The outcome reconcile joins through it."
+      sms_uuid:
+        type: string?
+        attributes: ["@max(64)", "@indexed"]
+        description: "The enqueued sms row's EXTERNAL uuid (messaging.sms.uuid, a string) — NO DB constraint, the SMS twin of mail_id: the delivery-tracker pump joins messaging.sms_trackers through it (the tracker survives sms GC, unique(sms_uuid)). Stamped once at the sms enqueue seam, conditional on NULL, exactly like mail_id's attach verb; read-only cross-schema consumption, never a write into messaging from here. KEYED ON THE UUID, not the messaging.sms row id (the recorded rename vs Odoo's sms_id_int mirror): the tracker is uuid-decoupled and survives the gateway's terminal-row GC, a row-id mirror would dangle exactly when the pump needs it."
+      recipient_phone:
+        type: string?
+        attributes: ["@max(16)", "@indexed"]
+        description: "The recipient's CANONICAL E.164 number (phone-channel analog of recipient_email), stamped at mint from the sanitizer's E164Number — mail traces leave it NULL. The phone-keyed lookup arm (STOP matching, phone-keyed stats); the E.164 invariant is enforced at the DB by the hardening CHECK (trace_recipient_phone_canonical), the class the DSL cannot express."
       message_id:
         type: string?
         attributes: ["@max(255)", "@exclude_from_foreign_key_check"]
@@ -143,6 +161,15 @@ models:
       - type: index
         fields: [recipient_email, failure_type]
         description: "The auto-blacklist bounce-window arm (recipient_email + failure_type='mail_bounce' within now()-interval)"
+      - type: index
+        fields: [trace_type, trace_status]
+        description: "The delivery-tracker pump's scan arm — live sms-type traces still in a transient status (outgoing/process/pending) joined to messaging.sms_trackers by sms_uuid"
+      - type: index
+        fields: [sms_uuid]
+        description: "The pump's join arm onto messaging.sms_trackers (unique(sms_uuid)) — the no-FK seam's lookup path"
+      - type: index
+        fields: [recipient_phone]
+        description: "Phone-keyed trace lookups (STOP-reply matching against the send ledger; phone-keyed suppression probes)"
 
   - name: MailingFilter
     collection: mailing_filters
@@ -177,11 +204,13 @@ models:
 
 enums:
   - name: TraceType
-    description: "Trace channel — single value now; the SMS overlay adds 'sms'"
+    description: "Trace channel — the mail channel's outcome reconcile and the sms channel's delivery-tracker pump key off this"
     variants:
       - name: mail
         description: "Outbound email trace"
         default: true
+      - name: sms
+        description: "Outbound SMS trace — driven from messaging.sms_trackers by the delivery-tracker pump (asynchronous done-inference's per-recipient input)"
 
   - name: TraceStatus
     description: "The per-recipient lifecycle — hand-set via the seven set_* verbs; ALL NINE values declared once so the SMS overlay drives process/pending later without re-declaration. LABEL/VALUE INVERSION preserved verbatim: pending displays 'Sent', sent displays 'Delivered'"
@@ -232,3 +261,33 @@ enums:
         description: "Suppressed: duplicate recipient (set at send, trace canceled)"
       - name: mail_optout
         description: "Suppressed: per-audience opt-out (set at send, trace canceled)"
+      - name: sms_blacklist
+        description: "Suppressed: the recipient's canonical E.164 number is on the global phone blacklist (set at send on the SMS channel, trace canceled — the upstream `sms_blacklist` pre-send class)."
+      - name: sms_number_missing
+        description: "SMS transport verdict: no phone number"
+      - name: sms_number_format
+        description: "SMS transport verdict: unsanitizable number format"
+      - name: sms_country_not_supported
+        description: "SMS transport verdict: country not covered by the gateway"
+      - name: sms_registration_needed
+        description: "SMS transport verdict: sender registration required"
+      - name: sms_credit
+        description: "SMS transport verdict: insufficient gateway credit"
+      - name: sms_server
+        description: "SMS transport verdict: gateway/server error"
+      - name: sms_acc
+        description: "SMS transport verdict: gateway account error"
+      - name: sms_duplicate
+        description: "Suppressed: duplicate SMS recipient (set at send on the SMS channel, trace canceled)"
+      - name: sms_optout
+        description: "Suppressed: SMS recipient opted out (set at send on the SMS channel, trace canceled)"
+      - name: sms_expired
+        description: "SMS delivery report: expired (tracker-written; terminal error)"
+      - name: sms_invalid_destination
+        description: "SMS delivery report: invalid destination — BOUNCE class (trace_status='bounce', never the email auto-blacklist fact)"
+      - name: sms_not_allowed
+        description: "SMS delivery report: not allowed — BOUNCE class (trace_status='bounce')"
+      - name: sms_not_delivered
+        description: "SMS delivery report: not delivered (terminal error)"
+      - name: sms_rejected
+        description: "SMS delivery report: rejected — BOUNCE class (trace_status='bounce')"

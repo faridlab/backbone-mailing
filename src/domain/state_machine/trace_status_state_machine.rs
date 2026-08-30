@@ -97,6 +97,10 @@ impl trace_statusState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum trace_statusTransition {
+    /// outgoing -> process
+    SetProcess,
+    /// outgoing, process -> pending
+    SetPending,
     /// outgoing, process, pending -> sent
     SetSent,
     /// outgoing, sent, process, pending -> open
@@ -105,6 +109,8 @@ pub enum trace_statusTransition {
     SetReplied,
     /// outgoing, sent, open, process, pending -> bounce
     SetBounced,
+    /// outgoing, process, pending -> bounce
+    SetBouncedSms,
     /// outgoing, sent, process, pending -> error
     SetFailed,
     /// outgoing -> cancel
@@ -114,10 +120,13 @@ pub enum trace_statusTransition {
 impl std::fmt::Display for trace_statusTransition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::SetProcess => write!(f, "set_process"),
+            Self::SetPending => write!(f, "set_pending"),
             Self::SetSent => write!(f, "set_sent"),
             Self::SetOpened => write!(f, "set_opened"),
             Self::SetReplied => write!(f, "set_replied"),
             Self::SetBounced => write!(f, "set_bounced"),
+            Self::SetBouncedSms => write!(f, "set_bounced_sms"),
             Self::SetFailed => write!(f, "set_failed"),
             Self::SetCanceled => write!(f, "set_canceled"),
         }
@@ -129,10 +138,13 @@ impl FromStr for trace_statusTransition {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
+            "set_process" => Ok(Self::SetProcess),
+            "set_pending" => Ok(Self::SetPending),
             "set_sent" => Ok(Self::SetSent),
             "set_opened" => Ok(Self::SetOpened),
             "set_replied" => Ok(Self::SetReplied),
             "set_bounced" => Ok(Self::SetBounced),
+            "set_bounced_sms" => Ok(Self::SetBouncedSms),
             "set_failed" => Ok(Self::SetFailed),
             "set_canceled" => Ok(Self::SetCanceled),
             _ => Err(StateMachineError::InvalidTransition(s.to_string())),
@@ -144,10 +156,13 @@ impl trace_statusTransition {
     /// Get the target state of this transition
     pub fn target_state(&self) -> trace_statusState {
         match self {
+            Self::SetProcess => trace_statusState::Process,
+            Self::SetPending => trace_statusState::Pending,
             Self::SetSent => trace_statusState::Sent,
             Self::SetOpened => trace_statusState::Open,
             Self::SetReplied => trace_statusState::Reply,
             Self::SetBounced => trace_statusState::Bounce,
+            Self::SetBouncedSms => trace_statusState::Bounce,
             Self::SetFailed => trace_statusState::Error,
             Self::SetCanceled => trace_statusState::Cancel,
         }
@@ -156,10 +171,13 @@ impl trace_statusTransition {
     /// Get all transitions
     pub fn all() -> Vec<Self> {
         vec![
+            Self::SetProcess,
+            Self::SetPending,
             Self::SetSent,
             Self::SetOpened,
             Self::SetReplied,
             Self::SetBounced,
+            Self::SetBouncedSms,
             Self::SetFailed,
             Self::SetCanceled,
         ]
@@ -168,10 +186,13 @@ impl trace_statusTransition {
     /// Get allowed roles for this transition
     pub fn allowed_roles(&self) -> &'static [&'static str] {
         match self {
+            Self::SetProcess => &[],
+            Self::SetPending => &[],
             Self::SetSent => &[],
             Self::SetOpened => &[],
             Self::SetReplied => &[],
             Self::SetBounced => &[],
+            Self::SetBouncedSms => &[],
             Self::SetFailed => &[],
             Self::SetCanceled => &[],
         }
@@ -211,6 +232,9 @@ impl trace_statusStateMachine {
         }
 
         match (self.current_state, transition) {
+            (trace_statusState::Outgoing, trace_statusTransition::SetProcess) => true,
+            (trace_statusState::Outgoing, trace_statusTransition::SetPending) => true,
+            (trace_statusState::Process, trace_statusTransition::SetPending) => true,
             (trace_statusState::Outgoing, trace_statusTransition::SetSent) => true,
             (trace_statusState::Process, trace_statusTransition::SetSent) => true,
             (trace_statusState::Pending, trace_statusTransition::SetSent) => true,
@@ -228,6 +252,9 @@ impl trace_statusStateMachine {
             (trace_statusState::Open, trace_statusTransition::SetBounced) => true,
             (trace_statusState::Process, trace_statusTransition::SetBounced) => true,
             (trace_statusState::Pending, trace_statusTransition::SetBounced) => true,
+            (trace_statusState::Outgoing, trace_statusTransition::SetBouncedSms) => true,
+            (trace_statusState::Process, trace_statusTransition::SetBouncedSms) => true,
+            (trace_statusState::Pending, trace_statusTransition::SetBouncedSms) => true,
             (trace_statusState::Outgoing, trace_statusTransition::SetFailed) => true,
             (trace_statusState::Sent, trace_statusTransition::SetFailed) => true,
             (trace_statusState::Process, trace_statusTransition::SetFailed) => true,
@@ -340,17 +367,17 @@ mod tests {
     #[test]
     fn test_valid_transition() {
         let mut sm = trace_statusStateMachine::from_state(trace_statusState::Outgoing);
-        assert!(sm.can_transition(trace_statusTransition::SetSent));
-        let result = sm.transition(trace_statusTransition::SetSent);
+        assert!(sm.can_transition(trace_statusTransition::SetProcess));
+        let result = sm.transition(trace_statusTransition::SetProcess);
         assert!(result.is_ok());
-        assert_eq!(sm.current_state(), trace_statusState::Sent);
+        assert_eq!(sm.current_state(), trace_statusState::Process);
     }
 
     #[test]
     fn test_invalid_transition() {
         let mut sm = trace_statusStateMachine::from_state(trace_statusState::Process);
-        // SetCanceled is not valid from Process state
-        let result = sm.transition(trace_statusTransition::SetCanceled);
+        // SetProcess is not valid from Process state
+        let result = sm.transition(trace_statusTransition::SetProcess);
         assert!(result.is_err());
     }
 

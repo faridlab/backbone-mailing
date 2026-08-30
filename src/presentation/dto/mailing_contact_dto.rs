@@ -50,6 +50,9 @@ pub struct CreateMailingContactDto {
     #[cfg_attr(feature = "validation", validate(length(max = 2)))]
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "country_code")]
     pub country_code: Option<String>,
+    #[cfg_attr(feature = "validation", validate(length(max = 64)))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phone: Option<String>,
 }
 
 // =============================================================================
@@ -83,6 +86,9 @@ pub struct UpdateMailingContactDto {
     #[cfg_attr(feature = "validation", validate(length(max = 2)))]
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "country_code")]
     pub country_code: Option<String>,
+    #[cfg_attr(feature = "validation", validate(length(max = 64)))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phone: Option<String>,
 }
 
 // =============================================================================
@@ -117,12 +123,15 @@ pub struct PatchMailingContactDto {
     #[cfg_attr(feature = "validation", validate(length(max = 2)))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "country_code")]
     pub country_code: Option<String>,
+    #[cfg_attr(feature = "validation", validate(length(max = 64)))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phone: Option<String>,
 }
 
 impl PatchMailingContactDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.name.is_some() || self.first_name.is_some() || self.last_name.is_some() || self.email.is_some() || self.company_name.is_some() || self.country_code.is_some()
+        self.name.is_some() || self.first_name.is_some() || self.last_name.is_some() || self.email.is_some() || self.company_name.is_some() || self.country_code.is_some() || self.phone.is_some()
     }
 }
 
@@ -147,6 +156,7 @@ pub struct MailingContactResponseDto {
     pub email: String,
     pub company_name: Option<String>,
     pub country_code: Option<String>,
+    pub phone: Option<String>,
     pub metadata: AuditMetadata,
 }
 
@@ -224,6 +234,7 @@ impl From<MailingContact> for MailingContactResponseDto {
             email: entity.email,
             company_name: entity.company_name,
             country_code: entity.country_code,
+            phone: entity.phone,
             metadata: entity.metadata,
         }
     }
@@ -252,6 +263,7 @@ impl From<CreateMailingContactDto> for MailingContact {
             email: dto.email,
             company_name: dto.company_name,
             country_code: dto.country_code,
+            phone: dto.phone,
             metadata: AuditMetadata::default(),
         }
     }
@@ -267,6 +279,7 @@ impl From<&MailingContact> for MailingContactResponseDto {
             email: entity.email.clone(),
             company_name: entity.company_name.clone(),
             country_code: entity.country_code.clone(),
+            phone: entity.phone.clone(),
             metadata: entity.metadata.clone(),
         }
     }
@@ -286,6 +299,7 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingContactDto> for MailingContact {
         self.email = dto.email;
         self.company_name = dto.company_name;
         self.country_code = dto.country_code;
+        self.phone = dto.phone;
         Ok(self)
     }
 }

@@ -19,6 +19,14 @@
 # contract). The LABEL/VALUE INVERSION is preserved VERBATIM on the model
 # field's display_labels (pending displays 'Sent', sent displays
 # 'Delivered'): the stored value is the contract, the display is data.
+#
+# The SMS overlay's channel-state mapping (the port of SMS_STATE_TO_
+# TRACE_STATUS) landed as two MORE verbs in the same one-conditional-UPDATE
+# shape — set_process/set_pending below — plus set_bounced_sms (the bounce
+# edge with the SMS failure vocabulary: an SMS bounce must never carry
+# 'mail_bounce', the EMAIL auto-blacklist's fact source). The nine values
+# and the label inversion are NOT re-declared; every SMS-channel trace
+# write goes through these verbs exactly like the mail channel's seven.
 # =============================================================================
 
 name: trace_status
@@ -42,6 +50,14 @@ states:
     cancel:
       final: true
   transitions:
+    set_process:
+      from: [outgoing]
+      to: process
+      message: "SMS overlay only — the delivery-tracker pump saw the channel hold the message (tracker 'process': queued at the gateway before dispatch). Mail-channel rows never enter process."
+    set_pending:
+      from: [outgoing, process]
+      to: pending
+      message: "SMS overlay only — handed to the gateway, awaiting the delivery report (displays 'Sent'). outgoing is a legal source: the pump observes at sweep cadence, so a tracker that already moved past 'process' advances the trace in one compressed step (the same partial-order the upstream _update_sms_traces monotonic table admits)."
     set_sent:
       from: [outgoing, process, pending]
       to: sent
@@ -58,6 +74,10 @@ states:
       from: [outgoing, sent, open, process, pending]
       to: bounce
       message: "Bounce verdict — sets failure_type='mail_bounce' (the auto-blacklist window's fact source); also stamps open_datetime (upstream treats a bounce as a touch)"
+    set_bounced_sms:
+      from: [outgoing, process, pending]
+      to: bounce
+      message: "SMS overlay only — the delivery report's bounce-class codes (sms_invalid_destination / sms_not_allowed / sms_rejected) land as trace 'bounce' with the SMS failure code carried VERBATIM: never 'mail_bounce' (the EMAIL auto-blacklist's fact source must stay channel-pure) and never an open_datetime stamp (an SMS bounce is not a mail touch)"
     set_failed:
       from: [outgoing, sent, process, pending]
       to: error

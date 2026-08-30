@@ -106,7 +106,11 @@ models:
       country_code:
         type: string?
         attributes: ["@max(2)"]
-        description: "Optional ISO 3166-1 alpha-2 country code — plain column, no geo FK at this scope."
+        description: "Optional ISO 3166-1 alpha-2 country code — plain column, no geo FK at this scope. Doubles as the SANITIZE HINT for phone: a national-format phone value resolves against it at send time."
+      phone:
+        type: string?
+        attributes: ["@max(64)"]
+        description: "RAW as-entered mobile number (Odoo's `mobile` — the load-bearing SMS enabler). Canonicalization happens AT SEND through mail's public phone_format(raw, country_code); the canonical form lands ONLY on the trace (recipient_phone). NO stored phone_sanitized twin: the recorded no-stored-cache deviation explicitly names mailing contact statistics as the write-your-own-model consumer."
       metadata:
         type: Metadata
         attributes: ["@audit_metadata"]

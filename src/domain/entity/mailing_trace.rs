@@ -62,6 +62,8 @@ pub struct MailingTrace {
     pub recipient_id: Uuid,
     pub recipient_email: String,
     pub mail_id: Option<Uuid>,
+    pub sms_uuid: Option<String>,
+    pub recipient_phone: Option<String>,
     pub message_id: Option<String>,
     pub(crate) trace_status: TraceStatus,
     pub failure_type: Option<TraceFailureType>,
@@ -93,6 +95,8 @@ impl MailingTrace {
             recipient_id,
             recipient_email,
             mail_id: None,
+            sms_uuid: None,
+            recipient_phone: None,
             message_id: None,
             trace_status,
             failure_type: None,
@@ -169,6 +173,18 @@ impl MailingTrace {
     /// Set the mail_id field (chainable)
     pub fn with_mail_id(mut self, value: Uuid) -> Self {
         self.mail_id = Some(value);
+        self
+    }
+
+    /// Set the sms_uuid field (chainable)
+    pub fn with_sms_uuid(mut self, value: String) -> Self {
+        self.sms_uuid = Some(value);
+        self
+    }
+
+    /// Set the recipient_phone field (chainable)
+    pub fn with_recipient_phone(mut self, value: String) -> Self {
+        self.recipient_phone = Some(value);
         self
     }
 
@@ -262,6 +278,12 @@ impl MailingTrace {
                 }
                 "mail_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.mail_id = v; }
+                }
+                "sms_uuid" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.sms_uuid = v; }
+                }
+                "recipient_phone" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.recipient_phone = v; }
                 }
                 "message_id" => {
                     if let Ok(v) = serde_json::from_value(value) { self.message_id = v; }
@@ -366,6 +388,8 @@ pub struct MailingTraceBuilder {
     recipient_id: Option<Uuid>,
     recipient_email: Option<String>,
     mail_id: Option<Uuid>,
+    sms_uuid: Option<String>,
+    recipient_phone: Option<String>,
     message_id: Option<String>,
     trace_status: Option<TraceStatus>,
     failure_type: Option<TraceFailureType>,
@@ -422,6 +446,18 @@ impl MailingTraceBuilder {
     /// Set the mail_id field (optional)
     pub fn mail_id(mut self, value: Uuid) -> Self {
         self.mail_id = Some(value);
+        self
+    }
+
+    /// Set the sms_uuid field (optional)
+    pub fn sms_uuid(mut self, value: String) -> Self {
+        self.sms_uuid = Some(value);
+        self
+    }
+
+    /// Set the recipient_phone field (optional)
+    pub fn recipient_phone(mut self, value: String) -> Self {
+        self.recipient_phone = Some(value);
         self
     }
 
@@ -492,6 +528,8 @@ impl MailingTraceBuilder {
             recipient_id,
             recipient_email,
             mail_id: self.mail_id,
+            sms_uuid: self.sms_uuid,
+            recipient_phone: self.recipient_phone,
             message_id: self.message_id,
             trace_status: self.trace_status.unwrap_or_default(),
             failure_type: self.failure_type,

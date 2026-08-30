@@ -110,12 +110,24 @@ events:
 #       rows through the mail queue's public write service (the
 #       (mailing, recipient) unique is the mint fence);
 #   (6) complete the mailing (sent_date, kpi_mail_required on first send);
-#   (7) reconcile settled mail verdicts onto outgoing traces
+#   (7) reconcile settled transport verdicts onto outgoing traces
 #       (set_sent/set_failed per recipient — one failure never fails the
 #       batch);
 #   (8) auto-blacklist sweep (DB-clock now() window over
 #       failure_type='mail_bounce' traces; thresholds are config keys);
-#   (9) A/B winner promotion for tests past promote_at with a done sibling.
+#   (9) A/B winner promotion for tests past promote_at with a done sibling;
+#   (10) SMS delivery-tracker pump — the SMS channel's asynchronous
+#       completion arm: sms-type transient traces join
+#       messaging.sms_trackers by sms_uuid (read-only) and advance through
+#       the same set_* verb family (set_process/set_pending/set_sent/
+#       set_bounced_sms/set_failed/set_canceled); then every walked-out
+#       sms mailing (the durable sms_walk_complete marker) gets ONE
+#       done-inference attempt — lock the row FOR UPDATE, re-check no
+#       transient trace remains UNDER the lock, then the state-guarded
+#       complete verb (the sms channel's done is asynchronous; the walk
+#       never completes it synchronously — no new cron, this job is the
+#       only clock). Hosts may also drive the pump verb directly after a
+#       webhook receipt; the sweep cadence is the floor.
 scheduled_jobs:
 
   mailing-send-queue:

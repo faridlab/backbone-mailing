@@ -49,12 +49,13 @@ pub struct MailingContactFilter {
     pub email: Option<String>,
     pub company_name: Option<String>,
     pub country_code: Option<String>,
+    pub phone: Option<String>,
 }
 
 impl MailingContactFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.name.is_some() || self.first_name.is_some() || self.last_name.is_some() || self.email.is_some() || self.company_name.is_some() || self.country_code.is_some()
+        self.name.is_some() || self.first_name.is_some() || self.last_name.is_some() || self.email.is_some() || self.company_name.is_some() || self.country_code.is_some() || self.phone.is_some()
     }
 }
 

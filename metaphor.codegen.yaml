@@ -24,6 +24,34 @@ user_owned:
   - "src/application/service/mailing_stats_read_service.rs"
   - "src/application/service/subscription_write_service.rs"
   - "src/application/service/ab_test_write_service.rs"
+  # SMS-channel STOP surface (the mass_mailing_sms overlay's STOP legs): the
+  # inbound-reply + code-bearing blacklist-add verbs with the Tier B STOP-code
+  # floor (MSM-B-10 — the 3-char upstream code shape is refused), and the
+  # claim-time phone-blacklist suppression arm that mints pre-canceled visible
+  # traces (failure_type='sms_blacklist').
+  - "src/application/service/sms_stop_service.rs"
+  - "src/application/service/sms_suppression_service.rs"
+
+  # The public /r/:code/m/:trace trace-route family (click + pixel +
+  # unsubscribe, the deferred MMF-H seam): the cross-module click seam
+  # (TraceClickPort — the module owns the trait, the host wires the
+  # short-link implementation; deny-by-default) and the route orchestration
+  # service that drives the trace state helpers + the subscription opt-out.
+  - "src/application/service/trace_click_ports.rs"
+  - "src/application/service/trace_route_service.rs"
+
+  # The SMS channel's asynchronous completion clock: advances sms-type
+  # traces from delivery-tracker verdicts (read-only cross-schema join by
+  # sms_uuid) and infers done for walked-out sms mailings under a FOR
+  # UPDATE lock before the remaining-check (the claim precedent applied to
+  # the completion edge). Rides the single send job as its last step.
+  - "src/application/service/sms_delivery_pump_service.rs"
+
+  # The public trace-route handlers themselves (bare capability mount, the
+  # engagement /r precedent). Declared before the file lands — a landing
+  # without the declaration is clobbered on the next regen, a declaration
+  # without the file is the dangling class the P2 council removed.
+  - "src/presentation/http/trace_routes.rs"
 
   # Hand-authored SQL holders for the write paths above (separate files, the
   # engagement house pattern — the generated per-entity repositories stay
@@ -38,13 +66,37 @@ user_owned:
   # DSL cannot express.
   - "migrations/*mailing*hardening*"
 
+  # The SMS-channel failure-type delta's hand-written migration (the enum
+  # variant is declared in schema/models/trace.model.yaml — the SSoT; the
+  # ALTER TYPE is its DB expression, up-only like every enum-add).
+  - "migrations/*sms_blacklist_failure_type*"
+
+  # The SMS-channel overlay's hand-written migration (columns + enum values;
+  # no statement in it USES a newly added value — the sms-usage CHECKs ride
+  # the next stamp under the *mailing*hardening* glob above).
+  - "migrations/*sms_channel_overlay*"
+
+  # The delivery-tracker pump's scan-arm index stamp (value-free DDL in its
+  # own stamp — the composite keeps the mail channel's transient traces off
+  # the pump's sms-only scan).
+  - "migrations/*sms_pump_scan_index*"
+
+  # The SMS channel's asynchronous done-inference cases: tracker-verdict
+  # advancement through the real substrate (enqueue + drainer claim +
+  # signed webhook), the last-verdict completion race (two pumps + two
+  # webhooks converge; sent_date stamps once), restart durability, and the
+  # premature-done guards.
+  - "tests/sms_delivery_cases.rs"
+
   # Behavior tests (the golden cases / oracle) + the concurrency proofs.
   - "tests/features/**"
   - "tests/mailing_cases.rs"
   - "tests/trace_cases.rs"
+  - "tests/trace_route_cases.rs"
   - "tests/subscription_cases.rs"
   - "tests/ab_seed_cases.rs"
   - "tests/send_probe_cases.rs"
+  - "tests/sms_stop_cases.rs"
   - "tests/behavior/**"
 
   # Hand-authored module documentation.

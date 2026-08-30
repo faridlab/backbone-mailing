@@ -45,6 +45,8 @@ pub struct CreateMailingDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(alias = "body_html")]
     pub body_html: String,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "body_plaintext")]
+    pub body_plaintext: Option<String>,
     #[cfg_attr(feature = "validation", validate(length(max = 255)))]
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(alias = "email_from")]
@@ -114,6 +116,8 @@ pub struct UpdateMailingDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(alias = "body_html")]
     pub body_html: String,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "body_plaintext")]
+    pub body_plaintext: Option<String>,
     #[cfg_attr(feature = "validation", validate(length(max = 255)))]
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(alias = "email_from")]
@@ -184,6 +188,8 @@ pub struct PatchMailingDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "body_html")]
     pub body_html: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "body_plaintext")]
+    pub body_plaintext: Option<String>,
     #[cfg_attr(feature = "validation", validate(length(max = 255)))]
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "email_from")]
@@ -235,7 +241,7 @@ pub struct PatchMailingDto {
 impl PatchMailingDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.subject.is_some() || self.preview.is_some() || self.body_html.is_some() || self.email_from.is_some() || self.reply_to.is_some() || self.keep_archives.is_some() || self.state.is_some() || self.schedule_type.is_some() || self.schedule_date.is_some() || self.sent_date.is_some() || self.mailing_type.is_some() || self.target_model.is_some() || self.mailing_domain.is_some() || self.use_exclusion_list.is_some() || self.campaign_id.is_some() || self.medium_id.is_some() || self.source_id.is_some() || self.user_id.is_some() || self.ab_testing_enabled.is_some() || self.ab_testing_pc.is_some() || self.ab_test_id.is_some() || self.kpi_mail_required.is_some()
+        self.subject.is_some() || self.preview.is_some() || self.body_html.is_some() || self.body_plaintext.is_some() || self.email_from.is_some() || self.reply_to.is_some() || self.keep_archives.is_some() || self.state.is_some() || self.schedule_type.is_some() || self.schedule_date.is_some() || self.sent_date.is_some() || self.mailing_type.is_some() || self.target_model.is_some() || self.mailing_domain.is_some() || self.use_exclusion_list.is_some() || self.campaign_id.is_some() || self.medium_id.is_some() || self.source_id.is_some() || self.user_id.is_some() || self.ab_testing_enabled.is_some() || self.ab_testing_pc.is_some() || self.ab_test_id.is_some() || self.kpi_mail_required.is_some()
     }
 }
 
@@ -258,6 +264,7 @@ pub struct MailingResponseDto {
     pub preview: Option<String>,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub body_html: String,
+    pub body_plaintext: Option<String>,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub email_from: String,
     pub reply_to: Option<String>,
@@ -357,6 +364,7 @@ impl From<Mailing> for MailingResponseDto {
             subject: entity.subject,
             preview: entity.preview,
             body_html: entity.body_html,
+            body_plaintext: entity.body_plaintext,
             email_from: entity.email_from,
             reply_to: entity.reply_to,
             keep_archives: entity.keep_archives,
@@ -401,6 +409,7 @@ impl From<CreateMailingDto> for Mailing {
             subject: dto.subject,
             preview: dto.preview,
             body_html: dto.body_html,
+            body_plaintext: dto.body_plaintext,
             email_from: dto.email_from,
             reply_to: dto.reply_to,
             keep_archives: dto.keep_archives,
@@ -432,6 +441,7 @@ impl From<&Mailing> for MailingResponseDto {
             subject: entity.subject.clone(),
             preview: entity.preview.clone(),
             body_html: entity.body_html.clone(),
+            body_plaintext: entity.body_plaintext.clone(),
             email_from: entity.email_from.clone(),
             reply_to: entity.reply_to.clone(),
             keep_archives: entity.keep_archives.clone(),
@@ -467,6 +477,7 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingDto> for Mailing {
         self.subject = dto.subject;
         self.preview = dto.preview;
         self.body_html = dto.body_html;
+        self.body_plaintext = dto.body_plaintext;
         self.email_from = dto.email_from;
         self.reply_to = dto.reply_to;
         self.keep_archives = dto.keep_archives;

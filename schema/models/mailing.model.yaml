@@ -59,7 +59,10 @@ models:
       body_html:
         type: string
         attributes: ["@required"]
-        description: "The RENDERED html body to send — stored as-is. No builder/architecture column and no server-side render engine exists here (headless port: the webapp owns editing and rendering)."
+        description: "The RENDERED html body to send — stored as-is. No builder/architecture column and no server-side render engine exists here (headless port: the webapp owns editing and rendering). The mail channel's body; an SMS mailing leaves it as the placeholder it must still carry (@required) and sends body_plaintext instead."
+      body_plaintext:
+        type: string?
+        description: "The SMS body (Odoo mailing.mailing.body_plaintext). REQUIRED at launch for mailing_type='sms' — the launch verb refuses without it and the hardening CHECK (mailing_sms_body_present) refuses raw SQL; never consumed by the mail channel."
       email_from:
         type: string
         attributes: ["@required", "@max(255)"]
@@ -102,7 +105,7 @@ models:
         attributes: ["@required", "@default(mail)"]
         lifecycle:
           shape: inert
-        description: "Channel selector — the single value 'mail' in this module. The SMS overlay adds 'sms' later WITHOUT reshaping this entity (the overlay drives the already-declared process/pending trace statuses)."
+        description: "Channel selector — 'mail' sends through the mail module's queue with SYNCHRONOUS done (the walk completes the mailing itself); 'sms' re-routes onto the mail module's sms gateway with ASYNCHRONOUS done (the walk stamps the sms_walk_complete metadata marker and NEVER completes the mailing — the delivery-tracker pump closes it once no trace remains un-dispatched; the marker + state are the durable inference inputs, restart-safe)."
       target_model:
         type: MailingTargetModel
         attributes: ["@required", "@default(mailing_contact)"]
@@ -198,11 +201,13 @@ enums:
         description: "Defer until schedule_date; the claim's schedule_date predicate is the gate"
 
   - name: MailingType
-    description: "Channel selector — single value now; the SMS overlay adds 'sms' without reshaping the entity"
+    description: "Channel selector — the mail channel completes synchronously in its send walk; the sms channel's done is INFERRED asynchronously by the delivery-tracker pump"
     variants:
       - name: mail
-        description: "Outbound email through the mail module's queue"
+        description: "Outbound email through the mail module's queue (synchronous done — the walk's complete verb)"
         default: true
+      - name: sms
+        description: "Outbound SMS through the mail module's sms gateway (asynchronous done — the delivery-tracker pump infers it from sms_trackers once no trace remains un-dispatched)"
 
   - name: MailingTargetModel
     description: "The recipient population as a closed capability enum + resolver contract (mailing-local contact resolver; party resolver via the host-composed port) — not a meta-model registry"

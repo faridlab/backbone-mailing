@@ -52,6 +52,8 @@ pub struct MailingTraceFilter {
     pub recipient_id: Option<Uuid>,
     pub recipient_email: Option<String>,
     pub mail_id: Option<Uuid>,
+    pub sms_uuid: Option<String>,
+    pub recipient_phone: Option<String>,
     pub message_id: Option<String>,
     pub trace_status: Option<TraceStatus>,
     pub failure_type: Option<TraceFailureType>,
@@ -61,7 +63,7 @@ pub struct MailingTraceFilter {
 impl MailingTraceFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.trace_type.is_some() || self.is_test_trace.is_some() || self.mailing_id.is_some() || self.campaign_id.is_some() || self.recipient_model.is_some() || self.recipient_id.is_some() || self.recipient_email.is_some() || self.mail_id.is_some() || self.message_id.is_some() || self.trace_status.is_some() || self.failure_type.is_some() || self.failure_reason.is_some()
+        self.trace_type.is_some() || self.is_test_trace.is_some() || self.mailing_id.is_some() || self.campaign_id.is_some() || self.recipient_model.is_some() || self.recipient_id.is_some() || self.recipient_email.is_some() || self.mail_id.is_some() || self.sms_uuid.is_some() || self.recipient_phone.is_some() || self.message_id.is_some() || self.trace_status.is_some() || self.failure_type.is_some() || self.failure_reason.is_some()
     }
 }
 

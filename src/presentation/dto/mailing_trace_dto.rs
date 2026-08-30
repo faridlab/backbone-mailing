@@ -58,6 +58,12 @@ pub struct CreateMailingTraceDto {
     pub recipient_email: String,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "mail_id")]
     pub mail_id: Option<Uuid>,
+    #[cfg_attr(feature = "validation", validate(length(max = 64)))]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "sms_uuid")]
+    pub sms_uuid: Option<String>,
+    #[cfg_attr(feature = "validation", validate(length(max = 16)))]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "recipient_phone")]
+    pub recipient_phone: Option<String>,
     #[cfg_attr(feature = "validation", validate(length(max = 255)))]
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "message_id")]
     pub message_id: Option<String>,
@@ -113,6 +119,12 @@ pub struct UpdateMailingTraceDto {
     pub recipient_email: String,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "mail_id")]
     pub mail_id: Option<Uuid>,
+    #[cfg_attr(feature = "validation", validate(length(max = 64)))]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "sms_uuid")]
+    pub sms_uuid: Option<String>,
+    #[cfg_attr(feature = "validation", validate(length(max = 16)))]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "recipient_phone")]
+    pub recipient_phone: Option<String>,
     #[cfg_attr(feature = "validation", validate(length(max = 255)))]
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "message_id")]
     pub message_id: Option<String>,
@@ -168,6 +180,12 @@ pub struct PatchMailingTraceDto {
     pub recipient_email: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "mail_id")]
     pub mail_id: Option<Uuid>,
+    #[cfg_attr(feature = "validation", validate(length(max = 64)))]
+    #[serde(skip_serializing_if = "Option::is_none", alias = "sms_uuid")]
+    pub sms_uuid: Option<String>,
+    #[cfg_attr(feature = "validation", validate(length(max = 16)))]
+    #[serde(skip_serializing_if = "Option::is_none", alias = "recipient_phone")]
+    pub recipient_phone: Option<String>,
     #[cfg_attr(feature = "validation", validate(length(max = 255)))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "message_id")]
     pub message_id: Option<String>,
@@ -190,7 +208,7 @@ pub struct PatchMailingTraceDto {
 impl PatchMailingTraceDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.trace_type.is_some() || self.is_test_trace.is_some() || self.mailing_id.is_some() || self.campaign_id.is_some() || self.recipient_model.is_some() || self.recipient_id.is_some() || self.recipient_email.is_some() || self.mail_id.is_some() || self.message_id.is_some() || self.trace_status.is_some() || self.failure_type.is_some() || self.failure_reason.is_some() || self.sent_datetime.is_some() || self.open_datetime.is_some() || self.reply_datetime.is_some() || self.links_click_datetime.is_some()
+        self.trace_type.is_some() || self.is_test_trace.is_some() || self.mailing_id.is_some() || self.campaign_id.is_some() || self.recipient_model.is_some() || self.recipient_id.is_some() || self.recipient_email.is_some() || self.mail_id.is_some() || self.sms_uuid.is_some() || self.recipient_phone.is_some() || self.message_id.is_some() || self.trace_status.is_some() || self.failure_type.is_some() || self.failure_reason.is_some() || self.sent_datetime.is_some() || self.open_datetime.is_some() || self.reply_datetime.is_some() || self.links_click_datetime.is_some()
     }
 }
 
@@ -221,6 +239,8 @@ pub struct MailingTraceResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub recipient_email: String,
     pub mail_id: Option<Uuid>,
+    pub sms_uuid: Option<String>,
+    pub recipient_phone: Option<String>,
     pub message_id: Option<String>,
     pub trace_status: TraceStatus,
     pub failure_type: Option<TraceFailureType>,
@@ -308,6 +328,8 @@ impl From<MailingTrace> for MailingTraceResponseDto {
             recipient_id: entity.recipient_id,
             recipient_email: entity.recipient_email,
             mail_id: entity.mail_id,
+            sms_uuid: entity.sms_uuid,
+            recipient_phone: entity.recipient_phone,
             message_id: entity.message_id,
             trace_status: entity.trace_status,
             failure_type: entity.failure_type,
@@ -346,6 +368,8 @@ impl From<CreateMailingTraceDto> for MailingTrace {
             recipient_id: dto.recipient_id,
             recipient_email: dto.recipient_email,
             mail_id: dto.mail_id,
+            sms_uuid: dto.sms_uuid,
+            recipient_phone: dto.recipient_phone,
             message_id: dto.message_id,
             trace_status: dto.trace_status,
             failure_type: dto.failure_type,
@@ -371,6 +395,8 @@ impl From<&MailingTrace> for MailingTraceResponseDto {
             recipient_id: entity.recipient_id.clone(),
             recipient_email: entity.recipient_email.clone(),
             mail_id: entity.mail_id.clone(),
+            sms_uuid: entity.sms_uuid.clone(),
+            recipient_phone: entity.recipient_phone.clone(),
             message_id: entity.message_id.clone(),
             trace_status: entity.trace_status.clone(),
             failure_type: entity.failure_type.clone(),
@@ -400,6 +426,8 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingTraceDto> for MailingTrace {
         self.recipient_id = dto.recipient_id;
         self.recipient_email = dto.recipient_email;
         self.mail_id = dto.mail_id;
+        self.sms_uuid = dto.sms_uuid;
+        self.recipient_phone = dto.recipient_phone;
         self.message_id = dto.message_id;
         self.trace_status = dto.trace_status;
         self.failure_type = dto.failure_type;

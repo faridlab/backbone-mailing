@@ -1,0 +1,13 @@
+-- SMS-channel send-time suppression cause: trace_failure_type += 'sms_blacklist'
+-- (schema/models/trace.model.yaml is the source of truth — this is its DB delta).
+--
+-- Carried by the PRE-CANCELED visible traces the SMS channel's claim-time
+-- phone-blacklist suppression arm mints (trace_status='cancel' +
+-- failure_type='sms_blacklist'): a phone-blacklisted recipient shows up as a
+-- canceled trace, never a silent skip. The upstream `sms_blacklist` mass-mode
+-- pre-send class, verbatim.
+--
+-- Up-only on purpose: Postgres cannot drop an enum value, so there is no
+-- honest .down.sql (the accounting enum-add migrations follow the same shape).
+-- The value is inert until a write uses it.
+ALTER TYPE trace_failure_type ADD VALUE IF NOT EXISTS 'sms_blacklist';

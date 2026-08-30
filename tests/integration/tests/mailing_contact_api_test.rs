@@ -30,6 +30,7 @@ impl TestDataGenerator for MailingContactTestData {
             "email": format!("test{}@example.com", Uuid::new_v4().to_string().split('-').next().unwrap()),
             "company_name": null,
             "country_code": null,
+            "phone": null,
             "metadata": json!({}),
         })
     }
@@ -44,6 +45,7 @@ impl TestDataGenerator for MailingContactTestData {
             "email": format!("test{}@example.com", Uuid::new_v4().to_string().split('-').next().unwrap()),
             "company_name": null,
             "country_code": null,
+            "phone": null,
             "metadata": json!({}),
         })
     }

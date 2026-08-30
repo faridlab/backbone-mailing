@@ -58,6 +58,7 @@ pub struct Mailing {
     pub subject: String,
     pub preview: Option<String>,
     pub body_html: String,
+    pub body_plaintext: Option<String>,
     pub email_from: String,
     pub reply_to: Option<String>,
     pub keep_archives: bool,
@@ -95,6 +96,7 @@ impl Mailing {
             subject,
             preview: None,
             body_html,
+            body_plaintext: None,
             email_from,
             reply_to: None,
             keep_archives,
@@ -179,6 +181,12 @@ impl Mailing {
         self
     }
 
+    /// Set the body_plaintext field (chainable)
+    pub fn with_body_plaintext(mut self, value: String) -> Self {
+        self.body_plaintext = Some(value);
+        self
+    }
+
     /// Set the reply_to field (chainable)
     pub fn with_reply_to(mut self, value: String) -> Self {
         self.reply_to = Some(value);
@@ -260,6 +268,9 @@ impl Mailing {
                 }
                 "body_html" => {
                     if let Ok(v) = serde_json::from_value(value) { self.body_html = v; }
+                }
+                "body_plaintext" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.body_plaintext = v; }
                 }
                 "email_from" => {
                     if let Ok(v) = serde_json::from_value(value) { self.email_from = v; }
@@ -394,6 +405,7 @@ pub struct MailingBuilder {
     subject: Option<String>,
     preview: Option<String>,
     body_html: Option<String>,
+    body_plaintext: Option<String>,
     email_from: Option<String>,
     reply_to: Option<String>,
     keep_archives: Option<bool>,
@@ -431,6 +443,12 @@ impl MailingBuilder {
     /// Set the body_html field (required)
     pub fn body_html(mut self, value: String) -> Self {
         self.body_html = Some(value);
+        self
+    }
+
+    /// Set the body_plaintext field (optional)
+    pub fn body_plaintext(mut self, value: String) -> Self {
+        self.body_plaintext = Some(value);
         self
     }
 
@@ -561,6 +579,7 @@ impl MailingBuilder {
             subject,
             preview: self.preview,
             body_html,
+            body_plaintext: self.body_plaintext,
             email_from,
             reply_to: self.reply_to,
             keep_archives: self.keep_archives.unwrap_or(true),

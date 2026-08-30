@@ -17,6 +17,8 @@ pub fn mailing_trace_validator() -> MailingTraceValidator {
     EntityValidator::new()
         .rule(RequiredString::new("recipient_model", |e: &MailingTrace| &e.recipient_model))
         .rule(RequiredString::new("recipient_email", |e: &MailingTrace| &e.recipient_email))
+        .rule(OptionalNotBlank::new("sms_uuid", |e: &MailingTrace| e.sms_uuid.as_deref()))
+        .rule(OptionalNotBlank::new("recipient_phone", |e: &MailingTrace| e.recipient_phone.as_deref()))
         .rule(OptionalNotBlank::new("message_id", |e: &MailingTrace| e.message_id.as_deref()))
         .rule(OptionalNotBlank::new("failure_reason", |e: &MailingTrace| e.failure_reason.as_deref()))
     // <<< CUSTOM RULES

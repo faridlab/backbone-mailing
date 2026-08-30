@@ -185,4 +185,3 @@ pub fn create_protected_mailing_audience_routes<A: AuthMiddleware + Send + Sync 
             }
         }))
 }
-

@@ -192,6 +192,106 @@ pub fn create_protected_mailing_trace_routes<A: AuthMiddleware + Send + Sync + '
 // State Transition Handlers
 // =============================================================================
 
+/// Execute set_process transition on a MailingTrace.
+///
+/// POST /mailing_traces/:id/transitions/set_process
+pub async fn set_process_transition(
+    axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+) -> impl axum::response::IntoResponse {
+    use axum::{http::StatusCode, Json};
+
+    // Get current entity
+    let entity = match service.get_by_id(&id).await {
+        Ok(Some(e)) => e,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingTraceResponseDto>::not_found("MailingTrace", &id))),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
+    };
+
+    // Check permission (if auth enabled)
+    #[cfg(feature = "auth")]
+    {
+        let allowed_roles = trace_statusTransition::SetProcess.allowed_roles();
+        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_process");
+        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        if !has_specific_perm && !has_update_perm {
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_process transition")));
+        }
+    }
+
+    // Create state machine from entity's actual status and validate transition
+    let current_state: trace_statusState = entity.trace_status.to_string().parse()
+        .unwrap_or(trace_statusState::default());
+    let sm = trace_statusStateMachine::from_state(current_state);
+    if !sm.can_transition(trace_statusTransition::SetProcess) {
+        return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
+    }
+
+    // Apply transition via partial update
+    let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
+    fields.insert("trace_status".to_string(), serde_json::Value::String("Process".to_string()));
+
+    match service.partial_update(&id, fields).await {
+        Ok(Some(updated)) => {
+            let response: MailingTraceResponseDto = updated.into();
+            (StatusCode::OK, Json(ApiResponse::ok(response)))
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingTraceResponseDto>::not_found("MailingTrace", &id))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
+    }
+}
+
+/// Execute set_pending transition on a MailingTrace.
+///
+/// POST /mailing_traces/:id/transitions/set_pending
+pub async fn set_pending_transition(
+    axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+) -> impl axum::response::IntoResponse {
+    use axum::{http::StatusCode, Json};
+
+    // Get current entity
+    let entity = match service.get_by_id(&id).await {
+        Ok(Some(e)) => e,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingTraceResponseDto>::not_found("MailingTrace", &id))),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
+    };
+
+    // Check permission (if auth enabled)
+    #[cfg(feature = "auth")]
+    {
+        let allowed_roles = trace_statusTransition::SetPending.allowed_roles();
+        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_pending");
+        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        if !has_specific_perm && !has_update_perm {
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_pending transition")));
+        }
+    }
+
+    // Create state machine from entity's actual status and validate transition
+    let current_state: trace_statusState = entity.trace_status.to_string().parse()
+        .unwrap_or(trace_statusState::default());
+    let sm = trace_statusStateMachine::from_state(current_state);
+    if !sm.can_transition(trace_statusTransition::SetPending) {
+        return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
+    }
+
+    // Apply transition via partial update
+    let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
+    fields.insert("trace_status".to_string(), serde_json::Value::String("Pending".to_string()));
+
+    match service.partial_update(&id, fields).await {
+        Ok(Some(updated)) => {
+            let response: MailingTraceResponseDto = updated.into();
+            (StatusCode::OK, Json(ApiResponse::ok(response)))
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingTraceResponseDto>::not_found("MailingTrace", &id))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
+    }
+}
+
 /// Execute set_sent transition on a MailingTrace.
 ///
 /// POST /mailing_traces/:id/transitions/set_sent
@@ -392,6 +492,56 @@ pub async fn set_bounced_transition(
     }
 }
 
+/// Execute set_bounced_sms transition on a MailingTrace.
+///
+/// POST /mailing_traces/:id/transitions/set_bounced_sms
+pub async fn set_bounced_sms_transition(
+    axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+) -> impl axum::response::IntoResponse {
+    use axum::{http::StatusCode, Json};
+
+    // Get current entity
+    let entity = match service.get_by_id(&id).await {
+        Ok(Some(e)) => e,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingTraceResponseDto>::not_found("MailingTrace", &id))),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
+    };
+
+    // Check permission (if auth enabled)
+    #[cfg(feature = "auth")]
+    {
+        let allowed_roles = trace_statusTransition::SetBouncedSms.allowed_roles();
+        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_bounced_sms");
+        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        if !has_specific_perm && !has_update_perm {
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_bounced_sms transition")));
+        }
+    }
+
+    // Create state machine from entity's actual status and validate transition
+    let current_state: trace_statusState = entity.trace_status.to_string().parse()
+        .unwrap_or(trace_statusState::default());
+    let sm = trace_statusStateMachine::from_state(current_state);
+    if !sm.can_transition(trace_statusTransition::SetBouncedSms) {
+        return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
+    }
+
+    // Apply transition via partial update
+    let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
+    fields.insert("trace_status".to_string(), serde_json::Value::String("Bounce".to_string()));
+
+    match service.partial_update(&id, fields).await {
+        Ok(Some(updated)) => {
+            let response: MailingTraceResponseDto = updated.into();
+            (StatusCode::OK, Json(ApiResponse::ok(response)))
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingTraceResponseDto>::not_found("MailingTrace", &id))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
+    }
+}
+
 /// Execute set_failed transition on a MailingTrace.
 ///
 /// POST /mailing_traces/:id/transitions/set_failed
@@ -497,10 +647,13 @@ pub fn create_mailing_trace_transition_routes(service: Arc<MailingTraceService>)
     use axum::routing::post;
 
     Router::new()
+        .route("/mailing_traces/:id/transitions/set_process", post(set_process_transition))
+        .route("/mailing_traces/:id/transitions/set_pending", post(set_pending_transition))
         .route("/mailing_traces/:id/transitions/set_sent", post(set_sent_transition))
         .route("/mailing_traces/:id/transitions/set_opened", post(set_opened_transition))
         .route("/mailing_traces/:id/transitions/set_replied", post(set_replied_transition))
         .route("/mailing_traces/:id/transitions/set_bounced", post(set_bounced_transition))
+        .route("/mailing_traces/:id/transitions/set_bounced_sms", post(set_bounced_sms_transition))
         .route("/mailing_traces/:id/transitions/set_failed", post(set_failed_transition))
         .route("/mailing_traces/:id/transitions/set_canceled", post(set_canceled_transition))
         .with_state(service)

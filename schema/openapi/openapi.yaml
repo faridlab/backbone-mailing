@@ -3227,6 +3227,10 @@ components:
           nullable: true
           type: string
           maxLength: 2
+        phone:
+          nullable: true
+          type: string
+          maxLength: 64
         metadata:
           type: object
 
@@ -3272,6 +3276,10 @@ components:
           nullable: true
           type: string
           maxLength: 2
+        phone:
+          nullable: true
+          type: string
+          maxLength: 64
         metadata:
           type: object
 
@@ -3304,6 +3312,10 @@ components:
           nullable: true
           type: string
           maxLength: 2
+        phone:
+          nullable: true
+          type: string
+          maxLength: 64
         metadata:
           type: object
 
@@ -3333,6 +3345,10 @@ components:
           nullable: true
           type: string
           maxLength: 2
+        phone:
+          nullable: true
+          type: string
+          maxLength: 64
         metadata:
           type: object
 
@@ -3605,6 +3621,9 @@ components:
           maxLength: 255
         body_html:
           type: string
+        body_plaintext:
+          nullable: true
+          type: string
         email_from:
           type: string
           maxLength: 255
@@ -3704,6 +3723,9 @@ components:
           maxLength: 255
         body_html:
           type: string
+        body_plaintext:
+          nullable: true
+          type: string
         email_from:
           type: string
           maxLength: 255
@@ -3790,6 +3812,9 @@ components:
           maxLength: 255
         body_html:
           type: string
+        body_plaintext:
+          nullable: true
+          type: string
         email_from:
           type: string
           maxLength: 255
@@ -3860,6 +3885,9 @@ components:
           type: string
           maxLength: 255
         body_html:
+          type: string
+        body_plaintext:
+          nullable: true
           type: string
         email_from:
           type: string
@@ -3970,6 +3998,14 @@ components:
           nullable: true
           type: string
           format: uuid
+        sms_uuid:
+          nullable: true
+          type: string
+          maxLength: 64
+        recipient_phone:
+          nullable: true
+          type: string
+          maxLength: 16
         message_id:
           nullable: true
           type: string
@@ -4050,6 +4086,14 @@ components:
           nullable: true
           type: string
           format: uuid
+        sms_uuid:
+          nullable: true
+          type: string
+          maxLength: 64
+        recipient_phone:
+          nullable: true
+          type: string
+          maxLength: 16
         message_id:
           nullable: true
           type: string
@@ -4117,6 +4161,14 @@ components:
           nullable: true
           type: string
           format: uuid
+        sms_uuid:
+          nullable: true
+          type: string
+          maxLength: 64
+        recipient_phone:
+          nullable: true
+          type: string
+          maxLength: 16
         message_id:
           nullable: true
           type: string
@@ -4175,6 +4227,14 @@ components:
           nullable: true
           type: string
           format: uuid
+        sms_uuid:
+          nullable: true
+          type: string
+          maxLength: 64
+        recipient_phone:
+          nullable: true
+          type: string
+          maxLength: 16
         message_id:
           nullable: true
           type: string

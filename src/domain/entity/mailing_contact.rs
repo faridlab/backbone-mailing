@@ -54,6 +54,7 @@ pub struct MailingContact {
     pub email: String,
     pub company_name: Option<String>,
     pub country_code: Option<String>,
+    pub phone: Option<String>,
     #[serde(default)]
     #[sqlx(json)]
     pub metadata: AuditMetadata,
@@ -75,6 +76,7 @@ impl MailingContact {
             email,
             company_name: None,
             country_code: None,
+            phone: None,
             metadata: AuditMetadata::default(),
         }
     }
@@ -164,6 +166,12 @@ impl MailingContact {
         self
     }
 
+    /// Set the phone field (chainable)
+    pub fn with_phone(mut self, value: String) -> Self {
+        self.phone = Some(value);
+        self
+    }
+
     // ==========================================================
     // Partial Update
     // ==========================================================
@@ -189,6 +197,9 @@ impl MailingContact {
                 }
                 "country_code" => {
                     if let Ok(v) = serde_json::from_value(value) { self.country_code = v; }
+                }
+                "phone" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.phone = v; }
                 }
                 _ => {} // ignore unknown fields
             }
@@ -263,6 +274,7 @@ pub struct MailingContactBuilder {
     email: Option<String>,
     company_name: Option<String>,
     country_code: Option<String>,
+    phone: Option<String>,
 }
 
 impl MailingContactBuilder {
@@ -302,6 +314,12 @@ impl MailingContactBuilder {
         self
     }
 
+    /// Set the phone field (optional)
+    pub fn phone(mut self, value: String) -> Self {
+        self.phone = Some(value);
+        self
+    }
+
     /// Build the MailingContact entity
     ///
     /// Returns Err if any required field without a default is missing.
@@ -316,6 +334,7 @@ impl MailingContactBuilder {
             email,
             company_name: self.company_name,
             country_code: self.country_code,
+            phone: self.phone,
             metadata: AuditMetadata::default(),
         })
     }

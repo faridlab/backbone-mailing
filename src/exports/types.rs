@@ -170,6 +170,7 @@ pub struct MailingContactDto {
     pub email: String,
     pub company_name: Option<String>,
     pub country_code: Option<String>,
+    pub phone: Option<String>,
     pub metadata: serde_json::Value,
 }
 
@@ -346,6 +347,7 @@ pub struct MailingDto {
     pub subject: String,
     pub preview: Option<String>,
     pub body_html: String,
+    pub body_plaintext: Option<String>,
     pub email_from: String,
     pub reply_to: Option<String>,
     pub keep_archives: bool,
@@ -426,6 +428,8 @@ pub struct MailingTraceDto {
     pub recipient_id: Uuid,
     pub recipient_email: String,
     pub mail_id: Option<Uuid>,
+    pub sms_uuid: Option<String>,
+    pub recipient_phone: Option<String>,
     pub message_id: Option<String>,
     pub trace_status: TraceStatus,
     pub failure_type: Option<TraceFailureType>,

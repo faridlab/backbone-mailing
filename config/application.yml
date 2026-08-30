@@ -52,13 +52,6 @@ entities:
     pagination:
       default_limit: 20
       max_limit: 100
-  mailing_opt_out_reason:
-    collection: mailing_opt_out_reasons
-    enabled: true
-    cache_ttl: 300
-    pagination:
-      default_limit: 20
-      max_limit: 100
   mailing_trace:
     collection: mailing_traces
     enabled: true
@@ -82,6 +75,13 @@ entities:
       max_limit: 100
   mailing_audience:
     collection: mailing_audiences
+    enabled: true
+    cache_ttl: 300
+    pagination:
+      default_limit: 20
+      max_limit: 100
+  opt_out_reason:
+    collection: mailing_opt_out_reasons
     enabled: true
     cache_ttl: 300
     pagination:

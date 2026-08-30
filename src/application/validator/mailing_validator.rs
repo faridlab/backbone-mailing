@@ -18,6 +18,7 @@ pub fn mailing_validator() -> MailingValidator {
         .rule(RequiredString::new("subject", |e: &Mailing| &e.subject))
         .rule(OptionalNotBlank::new("preview", |e: &Mailing| e.preview.as_deref()))
         .rule(RequiredString::new("body_html", |e: &Mailing| &e.body_html))
+        .rule(OptionalNotBlank::new("body_plaintext", |e: &Mailing| e.body_plaintext.as_deref()))
         .rule(RequiredString::new("email_from", |e: &Mailing| &e.email_from))
         .rule(OptionalNotBlank::new("reply_to", |e: &Mailing| e.reply_to.as_deref()))
     // <<< CUSTOM RULES

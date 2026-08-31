@@ -38,6 +38,8 @@ pub struct CreateMailingAbTestDto {
     pub campaign_id: Uuid,
     #[serde(alias = "winner_selection")]
     pub winner_selection: AbWinnerSelection,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "winner_selection_sms")]
+    pub winner_selection_sms: Option<AbWinnerSelection>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "promote_at")]
     pub promote_at: Option<DateTime<Utc>>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
@@ -68,6 +70,8 @@ pub struct UpdateMailingAbTestDto {
     pub campaign_id: Uuid,
     #[serde(alias = "winner_selection")]
     pub winner_selection: AbWinnerSelection,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "winner_selection_sms")]
+    pub winner_selection_sms: Option<AbWinnerSelection>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "promote_at")]
     pub promote_at: Option<DateTime<Utc>>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
@@ -98,6 +102,8 @@ pub struct PatchMailingAbTestDto {
     pub campaign_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "winner_selection")]
     pub winner_selection: Option<AbWinnerSelection>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "winner_selection_sms")]
+    pub winner_selection_sms: Option<AbWinnerSelection>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "promote_at")]
     pub promote_at: Option<DateTime<Utc>>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
@@ -114,7 +120,7 @@ pub struct PatchMailingAbTestDto {
 impl PatchMailingAbTestDto {
     /// Check if any field is set
     pub fn has_changes(&self) -> bool {
-        self.campaign_id.is_some() || self.winner_selection.is_some() || self.promote_at.is_some() || self.completed.is_some() || self.winner_mailing_id.is_some() || self.sampling_seed.is_some()
+        self.campaign_id.is_some() || self.winner_selection.is_some() || self.winner_selection_sms.is_some() || self.promote_at.is_some() || self.completed.is_some() || self.winner_mailing_id.is_some() || self.sampling_seed.is_some()
     }
 }
 
@@ -135,6 +141,7 @@ pub struct MailingAbTestResponseDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     pub campaign_id: Uuid,
     pub winner_selection: AbWinnerSelection,
+    pub winner_selection_sms: Option<AbWinnerSelection>,
     pub promote_at: Option<DateTime<Utc>>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
     pub completed: bool,
@@ -200,7 +207,7 @@ pub struct MailingAbTestSummaryDto {
     pub id: Uuid,
     pub campaign_id: Uuid,
     pub winner_selection: AbWinnerSelection,
-    pub promote_at: Option<DateTime<Utc>>,
+    pub winner_selection_sms: Option<AbWinnerSelection>,
     pub created_at: Option<DateTime<Utc>>,
 }
 
@@ -214,6 +221,7 @@ impl From<MailingAbTest> for MailingAbTestResponseDto {
             id: entity.id,
             campaign_id: entity.campaign_id,
             winner_selection: entity.winner_selection,
+            winner_selection_sms: entity.winner_selection_sms,
             promote_at: entity.promote_at,
             completed: entity.completed,
             winner_mailing_id: entity.winner_mailing_id,
@@ -230,7 +238,7 @@ impl From<MailingAbTest> for MailingAbTestSummaryDto {
             id: entity.id,
             campaign_id: entity.campaign_id,
             winner_selection: entity.winner_selection,
-            promote_at: entity.promote_at,
+            winner_selection_sms: entity.winner_selection_sms,
             created_at,
         }
     }
@@ -242,6 +250,7 @@ impl From<CreateMailingAbTestDto> for MailingAbTest {
             id: Uuid::new_v4(),
             campaign_id: dto.campaign_id,
             winner_selection: dto.winner_selection,
+            winner_selection_sms: dto.winner_selection_sms,
             promote_at: dto.promote_at,
             completed: dto.completed,
             winner_mailing_id: dto.winner_mailing_id,
@@ -257,6 +266,7 @@ impl From<&MailingAbTest> for MailingAbTestResponseDto {
             id: entity.id.clone(),
             campaign_id: entity.campaign_id.clone(),
             winner_selection: entity.winner_selection.clone(),
+            winner_selection_sms: entity.winner_selection_sms.clone(),
             promote_at: entity.promote_at.clone(),
             completed: entity.completed.clone(),
             winner_mailing_id: entity.winner_mailing_id.clone(),
@@ -276,6 +286,7 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingAbTestDto> for MailingAbTest {
     fn apply_update(mut self, dto: UpdateMailingAbTestDto) -> backbone_core::ServiceResult<Self> {
         self.campaign_id = dto.campaign_id;
         self.winner_selection = dto.winner_selection;
+        self.winner_selection_sms = dto.winner_selection_sms;
         self.promote_at = dto.promote_at;
         self.completed = dto.completed;
         self.winner_mailing_id = dto.winner_mailing_id;

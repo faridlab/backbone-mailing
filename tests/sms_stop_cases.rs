@@ -236,6 +236,10 @@ async fn claim_time_suppression_mints_visible_cancel_traces_for_blacklisted_numb
             schedule_date: None,
             use_exclusion_list: true,
             campaign_id: None,
+            source_id: None,
+            ab_test_id: None,
+            ab_testing_enabled: false,
+            ab_testing_pc: 0,
         })
         .await
         .expect("create");

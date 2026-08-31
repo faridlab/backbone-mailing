@@ -11,6 +11,9 @@ use utoipa::ToSchema;
 pub enum MailingTargetModel {
     MailingContact,
     Party,
+    CrmLead,
+    CrmDeal,
+    SellingCustomer,
 }
 
 impl std::fmt::Display for MailingTargetModel {
@@ -18,6 +21,9 @@ impl std::fmt::Display for MailingTargetModel {
         match self {
             Self::MailingContact => write!(f, "mailing_contact"),
             Self::Party => write!(f, "party"),
+            Self::CrmLead => write!(f, "crm_lead"),
+            Self::CrmDeal => write!(f, "crm_deal"),
+            Self::SellingCustomer => write!(f, "selling_customer"),
         }
     }
 }
@@ -29,6 +35,9 @@ impl FromStr for MailingTargetModel {
         match s.to_lowercase().as_str() {
             "mailing_contact" => Ok(Self::MailingContact),
             "party" => Ok(Self::Party),
+            "crm_lead" => Ok(Self::CrmLead),
+            "crm_deal" => Ok(Self::CrmDeal),
+            "selling_customer" => Ok(Self::SellingCustomer),
             _ => Err(format!("Unknown MailingTargetModel variant: {}", s)),
         }
     }

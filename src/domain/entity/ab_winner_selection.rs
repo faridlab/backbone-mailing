@@ -13,6 +13,7 @@ pub enum AbWinnerSelection {
     OpenedRatio,
     ClicksRatio,
     RepliedRatio,
+    SaleInvoicedAmount,
 }
 
 impl std::fmt::Display for AbWinnerSelection {
@@ -22,6 +23,7 @@ impl std::fmt::Display for AbWinnerSelection {
             Self::OpenedRatio => write!(f, "opened_ratio"),
             Self::ClicksRatio => write!(f, "clicks_ratio"),
             Self::RepliedRatio => write!(f, "replied_ratio"),
+            Self::SaleInvoicedAmount => write!(f, "sale_invoiced_amount"),
         }
     }
 }
@@ -35,6 +37,7 @@ impl FromStr for AbWinnerSelection {
             "opened_ratio" => Ok(Self::OpenedRatio),
             "clicks_ratio" => Ok(Self::ClicksRatio),
             "replied_ratio" => Ok(Self::RepliedRatio),
+            "sale_invoiced_amount" => Ok(Self::SaleInvoicedAmount),
             _ => Err(format!("Unknown AbWinnerSelection variant: {}", s)),
         }
     }

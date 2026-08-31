@@ -52,6 +52,7 @@ pub struct MailingAbTest {
     pub id: Uuid,
     pub campaign_id: Uuid,
     pub winner_selection: AbWinnerSelection,
+    pub winner_selection_sms: Option<AbWinnerSelection>,
     pub promote_at: Option<DateTime<Utc>>,
     pub completed: bool,
     pub winner_mailing_id: Option<Uuid>,
@@ -73,6 +74,7 @@ impl MailingAbTest {
             id: Uuid::new_v4(),
             campaign_id,
             winner_selection,
+            winner_selection_sms: None,
             promote_at: None,
             completed,
             winner_mailing_id: None,
@@ -136,6 +138,12 @@ impl MailingAbTest {
     // Fluent Setters (with_* for optional fields)
     // ==========================================================
 
+    /// Set the winner_selection_sms field (chainable)
+    pub fn with_winner_selection_sms(mut self, value: AbWinnerSelection) -> Self {
+        self.winner_selection_sms = Some(value);
+        self
+    }
+
     /// Set the promote_at field (chainable)
     pub fn with_promote_at(mut self, value: DateTime<Utc>) -> Self {
         self.promote_at = Some(value);
@@ -161,6 +169,9 @@ impl MailingAbTest {
                 }
                 "winner_selection" => {
                     if let Ok(v) = serde_json::from_value(value) { self.winner_selection = v; }
+                }
+                "winner_selection_sms" => {
+                    if let Ok(v) = serde_json::from_value(value) { self.winner_selection_sms = v; }
                 }
                 "promote_at" => {
                     if let Ok(v) = serde_json::from_value(value) { self.promote_at = v; }
@@ -231,6 +242,7 @@ impl backbone_orm::EntityRepoMeta for MailingAbTest {
         m.insert("campaign_id".to_string(), "uuid".to_string());
         m.insert("winner_mailing_id".to_string(), "uuid".to_string());
         m.insert("winner_selection".to_string(), "ab_winner_selection".to_string());
+        m.insert("winner_selection_sms".to_string(), "ab_winner_selection".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {
@@ -246,6 +258,7 @@ impl backbone_orm::EntityRepoMeta for MailingAbTest {
 pub struct MailingAbTestBuilder {
     campaign_id: Option<Uuid>,
     winner_selection: Option<AbWinnerSelection>,
+    winner_selection_sms: Option<AbWinnerSelection>,
     promote_at: Option<DateTime<Utc>>,
     completed: Option<bool>,
     winner_mailing_id: Option<Uuid>,
@@ -262,6 +275,12 @@ impl MailingAbTestBuilder {
     /// Set the winner_selection field (default: `AbWinnerSelection::default()`)
     pub fn winner_selection(mut self, value: AbWinnerSelection) -> Self {
         self.winner_selection = Some(value);
+        self
+    }
+
+    /// Set the winner_selection_sms field (optional)
+    pub fn winner_selection_sms(mut self, value: AbWinnerSelection) -> Self {
+        self.winner_selection_sms = Some(value);
         self
     }
 
@@ -300,6 +319,7 @@ impl MailingAbTestBuilder {
             id: Uuid::new_v4(),
             campaign_id,
             winner_selection: self.winner_selection.unwrap_or_default(),
+            winner_selection_sms: self.winner_selection_sms,
             promote_at: self.promote_at,
             completed: self.completed.unwrap_or(false),
             winner_mailing_id: self.winner_mailing_id,

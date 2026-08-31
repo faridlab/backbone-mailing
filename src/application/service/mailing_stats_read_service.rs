@@ -37,6 +37,36 @@ pub struct MailingStats {
     pub replied_ratio: Option<i64>,
 }
 
+/// The shared-source caveat, surfaced verbatim by the source-grouped read
+/// whenever one source serves several campaigns: its totals belong to the
+/// SOURCE, not to any single campaign reading them.
+pub const SHARED_SOURCE_CAVEAT: &str =
+    "this engagement source serves several campaigns — the grouped totals are the \
+     source's, not any single campaign's";
+
+/// One engagement source's grouped trace metrics (the MVX-4 audit read):
+/// the winner metrics of every queried mailing citing this source, grouped
+/// BY SOURCE (attribution keys on utm source, never campaign).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SourceGroupedStats {
+    pub source_id: Uuid,
+    /// DISTINCT campaigns the source serves (across ALL live mailings
+    /// citing it — the property belongs to the source, not the query).
+    pub campaigns: i64,
+    /// Queried mailings citing the source.
+    pub mailings: i64,
+    pub total: i64,
+    pub sent: i64,
+    pub opened: i64,
+    pub clicked: i64,
+    pub replied: i64,
+    /// The source serves more than one campaign.
+    pub shared_source: bool,
+    /// The caveat sentence, present exactly when `shared_source` is true —
+    /// the read model states it, it never lets the reader infer it.
+    pub shared_source_caveat: Option<&'static str>,
+}
+
 impl From<(Uuid, MailingTraceCounts)> for MailingStats {
     fn from((mailing_id, c): (Uuid, MailingTraceCounts)) -> Self {
         Self {
@@ -112,5 +142,37 @@ impl MailingStatsReadService {
         all.into_iter()
             .next()
             .ok_or_else(|| MailingStatsError::NotFound(format!("mailing {mailing_id}")))
+    }
+
+    /// The source-grouped audit read (MVX-4): the trace metrics of the
+    /// given mailings aggregated BY the engagement source each mailing
+    /// cites — the winner-metric attribution grain. Mailings citing no
+    /// source attribute nothing and stay out; a source serving several
+    /// campaigns carries the shared-source caveat in its row.
+    pub async fn source_grouped_stats(
+        &self,
+        mailing_ids: &[Uuid],
+    ) -> Result<Vec<SourceGroupedStats>, MailingStatsError> {
+        let mut tx = self.pool.begin().await?;
+        let rows = TraceRepository::source_grouped_counts(&mut tx, mailing_ids).await?;
+        tx.commit().await?;
+        Ok(rows
+            .into_iter()
+            .map(|(source_id, campaigns, mailings, total, sent, opened, clicked, replied)| {
+                let shared_source = campaigns > 1;
+                SourceGroupedStats {
+                    source_id,
+                    campaigns,
+                    mailings,
+                    total,
+                    sent,
+                    opened,
+                    clicked,
+                    replied,
+                    shared_source,
+                    shared_source_caveat: shared_source.then_some(SHARED_SOURCE_CAVEAT),
+                }
+            })
+            .collect())
     }
 }

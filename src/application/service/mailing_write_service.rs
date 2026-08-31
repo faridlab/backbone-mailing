@@ -195,6 +195,52 @@ impl Default for AutoBlacklistConfig {
     }
 }
 
+// ── the bridge targets' default domains (MVX-1's typed seam) ───────────────
+
+/// The typed default-domain providers for the bridge targets — the port of
+/// upstream's `_mailing_get_default_domain` seam (the exclusion policy per
+/// target model), as DECLARATIVE JSON through the SAME `parse_domain`
+/// whitelist (MVX-5: never a Python-domain string, never an expression).
+/// A static, declarative table: no registry, no scan, no host hook to
+/// forget.
+///
+/// Applied at create time when the domain arrives EMPTY (the "no explicit
+/// filter" shape) and the target carries a default; an explicitly authored
+/// domain always wins.
+pub fn default_domain_for(target_model: &str) -> Option<serde_json::Value> {
+    match target_model {
+        // Upstream ships NO default domain for `crm.lead` (the mailing's
+        // own domain applies); the deal arm follows the lead posture (no
+        // upstream twin exists).
+        "crm_lead" | "crm_deal" => None,
+        // The sale bridge's exclusion policy, typed: mail only customers
+        // that carry a mail address. Upstream's `[('state', '!=', 'cancel')]`
+        // filters SALE-ORDER state, a column the whitelisted DSL cannot
+        // express — the mail-ability predicate is the honest typed
+        // equivalent (recorded deviation).
+        "selling_customer" => Some(serde_json::json!([
+            {"field": "email", "op": "!=", "value": ""}
+        ])),
+        _ => None,
+    }
+}
+
+/// Resolve the domain a create/update should STORE: an explicitly authored
+/// domain passes through; an EMPTY domain on a target with a default
+/// adopts it (re-parsed through the whitelist so a malformed default is a
+/// loud typed refusal, never a silent passthrough).
+fn domain_to_store(
+    parsed: &CompiledDomain,
+    target_model: &str,
+) -> Result<CompiledDomain, DomainInvalid> {
+    if parsed.terms.is_empty() {
+        if let Some(default_raw) = default_domain_for(target_model) {
+            return parse_domain(&default_raw);
+        }
+    }
+    Ok(parsed.clone())
+}
+
 // ── ports (host-composed seams) ─────────────────────────────────────────────
 
 /// Resolves a compiled domain into party recipients — the host's composition
@@ -203,6 +249,43 @@ impl Default for AutoBlacklistConfig {
 #[async_trait::async_trait]
 pub trait PartyRecipientResolver: Send + Sync {
     async fn resolve(&self, domain: &CompiledDomain) -> Result<Vec<ResolvedRecipient>, String>;
+}
+
+/// One EXTERNAL target's resolver — the per-target generalization of the
+/// party seam (the cycle-44 bridge contract, MVX-1: declarative
+/// composition, no registry scan). The host composes ONE resolver per
+/// bridge target (`crm_lead`, `crm_deal`, `selling_customer`, or `party`),
+/// keyed by the `target_model` string it serves; a target arriving at the
+/// send walk with NO composed resolver PARKS loudly — never a silent
+/// zero-recipient sweep.
+#[async_trait::async_trait]
+pub trait TargetRecipientResolver: Send + Sync {
+    /// The `target_model` value this resolver serves — exactly one of the
+    /// closed enum's external variants (`party`, `crm_lead`, `crm_deal`,
+    /// `selling_customer`).
+    fn target_model(&self) -> &'static str;
+
+    /// Resolve the compiled domain into recipients. The domain is the SAME
+    /// whitelisted typed DSL every target sees; the implementation maps it
+    /// onto its own schema. A failure string parks the mailing at send.
+    async fn resolve(&self, domain: &CompiledDomain) -> Result<Vec<ResolvedRecipient>, String>;
+}
+
+/// The party seam's adapter into the per-target registry — keeps the
+/// v0.2.x `with_party_resolver` composition working one-for-one.
+struct PartyResolverAdapter {
+    inner: Arc<dyn PartyRecipientResolver>,
+}
+
+#[async_trait::async_trait]
+impl TargetRecipientResolver for PartyResolverAdapter {
+    fn target_model(&self) -> &'static str {
+        "party"
+    }
+
+    async fn resolve(&self, domain: &CompiledDomain) -> Result<Vec<ResolvedRecipient>, String> {
+        self.inner.resolve(domain).await
+    }
 }
 
 /// Outbound mailing events. The default sink is a no-op with tracing — the
@@ -267,6 +350,20 @@ pub struct MailingUpsertCommand {
     pub schedule_date: Option<chrono::DateTime<chrono::Utc>>,
     pub use_exclusion_list: bool,
     pub campaign_id: Option<Uuid>,
+    /// Attribution: the engagement source this mailing cites (the utm-style
+    /// provenance the winner-metric reads and the shared-source audit group
+    /// by). Same one-way-cite posture as `campaign_id`: set at create,
+    /// respected (never silently cleared) by update.
+    pub source_id: Option<Uuid>,
+    /// The campaign-grain A/B control row this mailing belongs to. Binding
+    /// normally rides the A/B write verb (`bind_variant` stamps the trio
+    /// itself); the command carries them so a client can cite the test at
+    /// authoring time. Immutable after create, exactly like `campaign_id`.
+    pub ab_test_id: Option<Uuid>,
+    /// A/B gate: when true the mailing sends to its deterministic fragment.
+    pub ab_testing_enabled: bool,
+    /// A/B fragment percentage 0..=100 (the DB CHECK backstops raw SQL).
+    pub ab_testing_pc: i32,
 }
 
 /// What one sweep did — the observable the cron probe and the volume probe
@@ -292,6 +389,11 @@ pub struct SweepOutcome {
     pub reconcile_failed: usize,
     pub auto_blacklisted: u64,
     pub ab_promotions: usize,
+    /// A/B promotion steps SKIPPED because a declared seam refused (the
+    /// `sale_invoiced_amount` axis with no composed billing port): the skip
+    /// is loud and retryable — the next sweep retries once the host
+    /// composes the seam.
+    pub ab_seam_refusals: usize,
     /// SMS channel: walks whose last pass ended (the marker stamped here).
     pub sms_walks_marked: usize,
     /// SMS channel: traces advanced by a tracker verdict (step 10).
@@ -311,7 +413,8 @@ pub struct MailingWriteService {
     pool: sqlx::PgPool,
     cfg: MailingSendConfig,
     blacklist_cfg: AutoBlacklistConfig,
-    party_resolver: Option<Arc<dyn PartyRecipientResolver>>,
+    target_resolvers: std::collections::HashMap<String, Arc<dyn TargetRecipientResolver>>,
+    invoiced_amounts: Arc<dyn crate::application::service::sale_invoiced_amount_port::SaleInvoicedAmountPort>,
     events: Arc<dyn MailingEventSink>,
     messages: MessageWriteService,
     queue: MailQueueWriteService,
@@ -327,7 +430,10 @@ impl MailingWriteService {
             pool,
             cfg: MailingSendConfig::default(),
             blacklist_cfg: AutoBlacklistConfig::default(),
-            party_resolver: None,
+            target_resolvers: std::collections::HashMap::new(),
+            invoiced_amounts: Arc::new(
+                crate::application::service::sale_invoiced_amount_port::RefusingSaleInvoicedAmount,
+            ),
             events: Arc::new(TracingEventSink),
         }
     }
@@ -346,7 +452,42 @@ impl MailingWriteService {
 
     /// Compose the party resolver port (required for `target_model='party'`).
     pub fn with_party_resolver(mut self, r: Arc<dyn PartyRecipientResolver>) -> Self {
-        self.party_resolver = Some(r);
+        self.target_resolvers
+            .insert("party".to_string(), Arc::new(PartyResolverAdapter { inner: r }));
+        self
+    }
+
+    /// Compose ONE external target's resolver port — the cycle-44 bridge
+    /// seam. One registration per target; the LAST registration for a
+    /// target wins (boot-time composition, not runtime reconfiguration).
+    pub fn with_target_resolver(
+        mut self,
+        r: Arc<dyn TargetRecipientResolver>,
+    ) -> Self {
+        self.target_resolvers
+            .insert(r.target_model().to_string(), r);
+        self
+    }
+
+    /// Compose the billing-side seam for the `sale_invoiced_amount` winner
+    /// axis (deny-by-default until called — the TraceClickPort shape).
+    pub fn with_sale_invoiced_amount_port(
+        mut self,
+        port: Arc<dyn crate::application::service::sale_invoiced_amount_port::SaleInvoicedAmountPort>,
+    ) -> Self {
+        self.invoiced_amounts = port;
+        self
+    }
+
+    /// Compose the billing-side seam through a SHARED slot (the module-level
+    /// `SaleInvoicedAmountSlot` pattern — installs become visible to every
+    /// service built over the slot).
+    pub fn with_sale_invoiced_amount_slot(
+        mut self,
+        slot: &crate::application::service::sale_invoiced_amount_port::SaleInvoicedAmountSlot,
+    ) -> Self {
+        let slot = slot.clone();
+        self.invoiced_amounts = Arc::new(slot);
         self
     }
 
@@ -374,14 +515,19 @@ impl MailingWriteService {
             )));
         }
         let domain = parse_domain(&cmd.mailing_domain_raw)?;
-        let target_model = match cmd.target_model.as_str() {
-            "mailing_contact" | "party" => cmd.target_model.clone(),
-            other => {
+        let target_model = match cmd.target_model.parse::<crate::domain::entity::MailingTargetModel>() {
+            Ok(_) => cmd.target_model.clone(),
+            Err(_) => {
                 return Err(MailingWriteError::Invalid(format!(
-                    "target_model must be mailing_contact or party, not {other}"
+                    "target_model must be one of the closed enum's values \
+                     (mailing_contact, party, crm_lead, crm_deal, selling_customer), not {}",
+                    cmd.target_model
                 )))
             }
         };
+        // An EMPTY domain on a target with a typed default adopts it (the
+        // bridge exclusion policy); an authored domain always wins.
+        let domain = domain_to_store(&domain, &target_model)?;
         let id = Uuid::new_v4();
         let mut tx = self.pool.begin().await?;
         MailingSendRepository::insert_mailing(
@@ -398,9 +544,10 @@ impl MailingWriteService {
             cmd.schedule_date,
             cmd.use_exclusion_list,
             cmd.campaign_id,
-            false,
-            0,
-            None,
+            cmd.source_id,
+            cmd.ab_testing_enabled,
+            cmd.ab_testing_pc,
+            cmd.ab_test_id,
         )
         .await?;
         tx.commit().await?;
@@ -409,6 +556,11 @@ impl MailingWriteService {
 
     /// Update a DRAFT mailing (guarded — anything past draft refuses 409).
     /// The domain re-parses FIRST with the same refuse-loudly posture.
+    ///
+    /// The attribution cites (`campaign_id`, `source_id`, the A/B trio) are
+    /// deliberately NOT in the editable set: like `campaign_id`, they are
+    /// set once at create and an update never rewrites or silently clears
+    /// them — the one-way-cite posture the winner-metric reads rely on.
     pub async fn update_mailing(
         &self,
         id: Uuid,
@@ -765,24 +917,34 @@ impl MailingWriteService {
                 tx.commit().await?;
                 r
             }
-            "party" => match &self.party_resolver {
-                Some(resolver) => resolver.resolve(&domain).await.map_err(|e| {
-                    // A resolver failure parks loudly — not a silent empty sweep.
-                    MailingWriteError::Conflict(format!("party resolver failed: {e}"))
-                })?,
-                None => {
-                    let mut tx = self.pool.begin().await?;
-                    MailingSendRepository::park_mailing(
-                        &mut tx,
-                        m.id,
-                        "target_model='party' but no party resolver is composed",
-                    )
-                    .await?;
-                    tx.commit().await?;
-                    out.parked += 1;
-                    return Ok(());
+            // Every EXTERNAL target (party + the cycle-44 bridge targets)
+            // resolves through its composed per-target resolver port.
+            "party" | "crm_lead" | "crm_deal" | "selling_customer" => {
+                match self.target_resolvers.get(m.target_model.as_str()) {
+                    Some(resolver) => resolver.resolve(&domain).await.map_err(|e| {
+                        // A resolver failure parks loudly — not a silent empty sweep.
+                        MailingWriteError::Conflict(format!(
+                            "{} resolver failed: {e}",
+                            m.target_model
+                        ))
+                    })?,
+                    None => {
+                        let mut tx = self.pool.begin().await?;
+                        MailingSendRepository::park_mailing(
+                            &mut tx,
+                            m.id,
+                            &format!(
+                                "target_model='{}' but no {} resolver is composed",
+                                m.target_model, m.target_model
+                            ),
+                        )
+                        .await?;
+                        tx.commit().await?;
+                        out.parked += 1;
+                        return Ok(());
+                    }
                 }
-            },
+            }
             other => {
                 let mut tx = self.pool.begin().await?;
                 MailingSendRepository::park_mailing(
@@ -1105,8 +1267,6 @@ impl MailingWriteService {
                 email,
                 None,
                 m.reply_to.as_deref(),
-                // Per-mail custom headers: campaign sends carry none.
-                None,
                 None,
                 Some("mailing"),
                 Some(m.id),
@@ -1120,7 +1280,10 @@ impl MailingWriteService {
 
     /// Step (9): promote due A/B winners. `manual` tests never auto-promote
     /// (a human completes them); the completion stamp is guarded, so a
-    /// second sweep no-ops.
+    /// second sweep no-ops. The `sale_invoiced_amount` axis ranks through
+    /// the DECLARED billing-side seam (MVX-4: attributed by utm source,
+    /// never a cross-schema raw read) — an uncomposed seam SKIPS the test
+    /// loudly instead of promoting on a fake zero.
     async fn promote_due_ab_tests(&self, out: &mut SweepOutcome) -> Result<(), MailingWriteError> {
         let mut tx = self.pool.begin().await?;
         let due = MailingSendRepository::ab_tests_due_for_promotion(&mut tx).await?;
@@ -1129,14 +1292,32 @@ impl MailingWriteService {
             if selection == "manual" {
                 continue;
             }
-            let mut tx = self.pool.begin().await?;
-            let ranked =
-                MailingSendRepository::rank_variants_by_metric(&mut tx, ab_test_id, &selection)
-                    .await?;
-            let Some((winner_mailing_id, _ratio)) = ranked.first().copied() else {
-                tx.rollback().await?;
+            let winner = if selection == "sale_invoiced_amount" {
+                match self.rank_variants_by_invoiced_amount(ab_test_id).await {
+                    RankBySeamOutcome::Ranked(winner) => Some(winner),
+                    RankBySeamOutcome::Wait => None,
+                    RankBySeamOutcome::SeamRefused(detail) => {
+                        out.ab_seam_refusals += 1;
+                        tracing::warn!(
+                            ab_test_id = %ab_test_id,
+                            detail = %detail,
+                            "A/B promotion skipped: the invoiced-amount seam refused"
+                        );
+                        continue;
+                    }
+                }
+            } else {
+                let mut tx = self.pool.begin().await?;
+                let ranked =
+                    MailingSendRepository::rank_variants_by_metric(&mut tx, ab_test_id, &selection)
+                        .await?;
+                tx.commit().await?;
+                ranked.first().map(|(id, _)| *id)
+            };
+            let Some(winner_mailing_id) = winner else {
                 continue; // no done variant yet — wait for the next sweep
             };
+            let mut tx = self.pool.begin().await?;
             let promoted_id = Uuid::new_v4();
             MailingSendRepository::promote_winner(&mut tx, promoted_id, winner_mailing_id, ab_test_id)
                 .await?;
@@ -1153,6 +1334,83 @@ impl MailingWriteService {
         }
         Ok(())
     }
+
+    /// The `sale_invoiced_amount` ranking: each DONE variant ranks by the
+    /// invoiced total its cited engagement SOURCE carries, read once per
+    /// DISTINCT source through the billing-side seam. A variant citing no
+    /// source ranks LAST (None — it attributes nothing); a tie or an empty
+    /// variant set WAITS for the next sweep. The seam's refusal propagates
+    /// as [`RankBySeamOutcome::SeamRefused`] — the caller skips loudly.
+    async fn rank_variants_by_invoiced_amount(
+        &self,
+        ab_test_id: Uuid,
+    ) -> RankBySeamOutcome {
+        use crate::application::service::sale_invoiced_amount_port::SaleInvoicedAmountPort;
+
+        let mut tx = match self.pool.begin().await {
+            Ok(tx) => tx,
+            Err(e) => return RankBySeamOutcome::SeamRefused(e.to_string()),
+        };
+        let variants = match MailingSendRepository::variant_source_ids(&mut tx, ab_test_id).await {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = tx.rollback().await;
+                return RankBySeamOutcome::SeamRefused(e.to_string());
+            }
+        };
+        tx.commit().await.ok();
+
+        // One seam call per DISTINCT source — the shared-source caveat is
+        // exactly why: several campaigns' variants may share a source, and
+        // the audit read model surfaces that (see the stats service).
+        let mut per_source = std::collections::HashMap::new();
+        for (_, source) in variants.iter().filter_map(|(id, s)| s.map(|s| (*id, s))) {
+            if !per_source.contains_key(&source) {
+                match self.invoiced_amounts.invoiced_amount_for_source(source).await {
+                    Ok(amount) => {
+                        per_source.insert(source, amount.amount_untaxed_total);
+                    }
+                    Err(e) => return RankBySeamOutcome::SeamRefused(e.to_string()),
+                }
+            }
+        }
+
+        let mut ranked: Vec<(Uuid, Option<rust_decimal::Decimal>)> = variants
+            .into_iter()
+            .map(|(id, source)| {
+                let amount = source.and_then(|s| per_source.get(&s).copied());
+                (id, amount)
+            })
+            .collect();
+        if ranked.is_empty() {
+            return RankBySeamOutcome::Wait;
+        }
+        // Some(amount) ranks above None (a variant citing no source
+        // attributes nothing); ties break by mailing id — same deterministic
+        // shape as the trace-ratio ranking.
+        ranked.sort_by(|a, b| {
+            b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0))
+        });
+        if ranked.first().map(|(_, amount)| amount.is_none()).unwrap_or(true) {
+            // Every variant attributes nothing — a "winner" here would be
+            // an arbitrary pick dressed as a ranking. Wait.
+            return RankBySeamOutcome::Wait;
+        }
+        RankBySeamOutcome::Ranked(ranked[0].0)
+    }
+}
+
+/// The seam-backed ranking's verdict.
+enum RankBySeamOutcome {
+    /// A winner was ranked by attributed amount.
+    Ranked(Uuid),
+    /// Nothing rankable yet (no done variants, or every variant attributes
+    /// nothing) — the next sweep retries.
+    Wait,
+    /// The declared seam refused (not composed, or its backend failed):
+    /// the promotion step skips the test loudly, never promotes on a
+    /// fabricated zero.
+    SeamRefused(String),
 }
 
 // ── domain parsing (the refuse-loudly fence) ────────────────────────────────
@@ -1432,6 +1690,35 @@ mod tests {
     fn empty_domain_is_legal_matches_all() {
         let d = parse_domain(&serde_json::json!([])).unwrap();
         assert!(d.terms.is_empty());
+    }
+
+    #[test]
+    fn default_domains_are_declarative_and_whitelist_clean() {
+        // Every bridge default parses through the SAME whitelist and
+        // round-trips canonically — never an expression string (MVX-5).
+        for target in ["crm_lead", "crm_deal", "selling_customer"] {
+            match default_domain_for(target) {
+                Some(raw) => {
+                    let d = parse_domain(&raw)
+                        .unwrap_or_else(|e| panic!("{target} default must parse: {e}"));
+                    assert!(!d.terms.is_empty(), "{target} default is non-empty");
+                    let stored = domain_to_store(&CompiledDomain::default(), target)
+                        .expect("empty domain adopts the default");
+                    assert_eq!(stored, d, "{target}: adoption is exact");
+                }
+                None => {
+                    // Parity targets: an EMPTY domain stays EMPTY (upstream
+                    // ships no lead default — the mailing's own domain
+                    // applies).
+                    let stored = domain_to_store(&CompiledDomain::default(), target).unwrap();
+                    assert!(stored.terms.is_empty(), "{target} must adopt nothing");
+                }
+            }
+        }
+        // The authored-domain-wins rule: a non-empty domain never adopts.
+        let authored = parse_domain(&serde_json::json!([["email", "like", "acme"]])).unwrap();
+        let stored = domain_to_store(&authored, "selling_customer").unwrap();
+        assert_eq!(stored, authored);
     }
 
     #[test]

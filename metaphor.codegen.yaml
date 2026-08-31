@@ -47,6 +47,25 @@ user_owned:
   # the completion edge). Rides the single send job as its last step.
   - "src/application/service/sms_delivery_pump_service.rs"
 
+  # The bridge targets' billing-side seam (the mass_mailing_sale winner
+  # metric): a source-keyed invoiced-amount PORT this module owns and the
+  # host implements — deny-by-default (the TraceClickPort/PhoneBookPort
+  # shape), zero billing Cargo edge.
+  - "src/application/service/sale_invoiced_amount_port.rs"
+
+  # The cycle-44 bridge targets' hand-written migration (enum values +
+  # the A/B control's parallel sms winner axis; value-only ALTER TYPEs and
+  # a nullable column — no statement USES a newly added value, the
+  # sms_channel_overlay mechanics).
+  - "migrations/*bridge_targets*"
+
+  # The bridge-target probes: per-target resolution (park-loudly without a
+  # composed resolver), the typed default-domain providers, source-keyed
+  # winner-metric grouping with the shared-source caveat, the billing
+  # seam's refusing default, and the sms winner axis + mixed-channel
+  # compare action.
+  - "tests/bridge_cases.rs"
+
   # The public trace-route handlers themselves (bare capability mount, the
   # engagement /r precedent). Declared before the file lands — a landing
   # without the declaration is clobbered on the next regen, a declaration

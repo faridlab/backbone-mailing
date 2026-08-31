@@ -2977,6 +2977,9 @@ components:
           format: uuid
         winner_selection:
           type: string
+        winner_selection_sms:
+          nullable: true
+          type: string
         promote_at:
           nullable: true
           type: string
@@ -3020,6 +3023,9 @@ components:
           format: uuid
         winner_selection:
           type: string
+        winner_selection_sms:
+          nullable: true
+          type: string
         promote_at:
           nullable: true
           type: string
@@ -3050,6 +3056,9 @@ components:
           format: uuid
         winner_selection:
           type: string
+        winner_selection_sms:
+          nullable: true
+          type: string
         promote_at:
           nullable: true
           type: string
@@ -3073,6 +3082,9 @@ components:
           type: string
           format: uuid
         winner_selection:
+          type: string
+        winner_selection_sms:
+          nullable: true
           type: string
         promote_at:
           nullable: true

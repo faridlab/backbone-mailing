@@ -370,6 +370,7 @@ impl MailingSendRepository {
         schedule_date: Option<DateTime<Utc>>,
         use_exclusion_list: bool,
         campaign_id: Option<Uuid>,
+        source_id: Option<Uuid>,
         ab_testing_enabled: bool,
         ab_testing_pc: i32,
         ab_test_id: Option<Uuid>,
@@ -378,10 +379,11 @@ impl MailingSendRepository {
             r#"INSERT INTO mailing.mailings
                    (id, subject, preview, body_html, email_from, reply_to,
                     mailing_domain, target_model, schedule_type, schedule_date,
-                    use_exclusion_list, campaign_id, ab_testing_enabled,
-                    ab_testing_pc, ab_test_id)
+                    use_exclusion_list, campaign_id, source_id,
+                    ab_testing_enabled, ab_testing_pc, ab_test_id)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::mailing_target_model,
-                       $9::mailing_schedule_type, $10, $11, $12, $13, $14, $15)
+                       $9::mailing_schedule_type, $10, $11, $12, $13,
+                       $14, $15, $16)
                RETURNING id"#,
         )
         .bind(id)
@@ -396,6 +398,7 @@ impl MailingSendRepository {
         .bind(schedule_date)
         .bind(use_exclusion_list)
         .bind(campaign_id)
+        .bind(source_id)
         .bind(ab_testing_enabled)
         .bind(ab_testing_pc)
         .bind(ab_test_id)
@@ -865,8 +868,8 @@ impl MailingSendRepository {
     }
 
     /// One A/B test row (the promotion probe + the read side):
-    /// (id, campaign_id, winner_selection, promote_at, completed,
-    /// winner_mailing_id, sampling_seed).
+    /// (id, campaign_id, winner_selection, winner_selection_sms, promote_at,
+    /// completed, winner_mailing_id, sampling_seed).
     #[allow(clippy::type_complexity)]
     pub async fn find_ab_test(
         conn: &mut PgConnection,
@@ -876,6 +879,7 @@ impl MailingSendRepository {
             Uuid,
             Uuid,
             String,
+            Option<String>,
             Option<DateTime<Utc>>,
             bool,
             Option<Uuid>,
@@ -887,12 +891,14 @@ impl MailingSendRepository {
             Uuid,
             Uuid,
             String,
+            Option<String>,
             Option<DateTime<Utc>>,
             bool,
             Option<Uuid>,
             String,
         )>(
-            r#"SELECT id, campaign_id, winner_selection::text, promote_at,
+            r#"SELECT id, campaign_id, winner_selection::text,
+                      winner_selection_sms::text, promote_at,
                       completed, winner_mailing_id, sampling_seed
                FROM mailing.mailing_ab_tests
                WHERE id = $1 AND (metadata->>'deleted_at') IS NULL"#,
@@ -900,6 +906,27 @@ impl MailingSendRepository {
         .bind(ab_test_id)
         .fetch_optional(&mut *conn)
         .await
+    }
+
+    /// Declare the PARALLEL sms winner axis on a live test (MVX-2): guarded
+    /// on NOT completed — a completed test's axes are historical record.
+    /// Returns false when the test is gone or already completed.
+    pub async fn set_ab_test_sms_selection(
+        conn: &mut PgConnection,
+        ab_test_id: Uuid,
+        selection: &str,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query(
+            r#"UPDATE mailing.mailing_ab_tests
+               SET winner_selection_sms = $2::ab_winner_selection
+               WHERE id = $1 AND NOT completed
+                 AND (metadata->>'deleted_at') IS NULL"#,
+        )
+        .bind(ab_test_id)
+        .bind(selection)
+        .execute(&mut *conn)
+        .await
+        .map(|r| r.rows_affected() > 0)
     }
 
     /// Rank a test's done variants by the persisted metric and return them
@@ -911,11 +938,7 @@ impl MailingSendRepository {
         ab_test_id: Uuid,
         metric: &str,
     ) -> Result<Vec<(Uuid, i64)>, sqlx::Error> {
-        let metric_expr = match metric {
-            "clicks_ratio" => "t.links_click_datetime IS NOT NULL",
-            "replied_ratio" => "t.trace_status = 'reply'",
-            _ => "t.trace_status IN ('open', 'reply')",
-        };
+        let metric_expr = Self::metric_expr(metric);
         let sql = format!(
             r#"WITH sent AS (
                    SELECT m.id, count(t.id) AS sent_n
@@ -942,6 +965,82 @@ impl MailingSendRepository {
                ORDER BY ratio DESC, m.id"#
         );
         sqlx::query_as::<_, (Uuid, i64)>(&sql)
+            .bind(ab_test_id)
+            .fetch_all(&mut *conn)
+            .await
+    }
+
+    /// The FIXED trace-hit expression per selection value — the same
+    /// whitelist `rank_variants_by_metric` and the mixed-channel compare
+    /// share. The invoiced-amount axis is NOT here by design: it is not a
+    /// stored trace number (it reads through the declared billing seam at
+    /// promotion time), so the compare surfaces it via the opened default.
+    fn metric_expr(metric: &str) -> &'static str {
+        match metric {
+            "clicks_ratio" => "t.links_click_datetime IS NOT NULL",
+            "replied_ratio" => "t.trace_status = 'reply'",
+            _ => "t.trace_status IN ('open', 'reply')",
+        }
+    }
+
+    /// A test's DONE variants with their cited engagement SOURCE — the
+    /// `sale_invoiced_amount` ranking's input (MVX-4: attribution keys on
+    /// the utm source the mailing cites; a variant citing no source
+    /// attributes nothing and ranks last).
+    pub async fn variant_source_ids(
+        conn: &mut PgConnection,
+        ab_test_id: Uuid,
+    ) -> Result<Vec<(Uuid, Option<Uuid>)>, sqlx::Error> {
+        sqlx::query_as::<_, (Uuid, Option<Uuid>)>(
+            r#"SELECT id, source_id
+               FROM mailing.mailings
+               WHERE ab_test_id = $1
+                 AND state = 'done'
+                 AND (metadata->>'deleted_at') IS NULL
+               ORDER BY (metadata->>'created_at') NULLS LAST, id"#,
+        )
+        .bind(ab_test_id)
+        .fetch_all(&mut *conn)
+        .await
+    }
+
+    /// The mixed-channel compare (MVX-2): one grouped query over a test's
+    /// live variants, split per channel, ranking on STORED trace numbers
+    /// with each channel's own axis. Returns
+    /// (mailing_id, channel, sent, hits, parked) — `parked` marks a
+    /// variant currently parked on `metadata.send_error` (the sms send
+    /// walk's loud park: an sms variant typically carries ZERO traces until
+    /// that walk is composed, so its ratio is honestly `None`, never a
+    /// fabricated 0%).
+    pub async fn mixed_channel_metric_rows(
+        conn: &mut PgConnection,
+        ab_test_id: Uuid,
+        mail_axis: &str,
+        sms_axis: &str,
+    ) -> Result<Vec<(Uuid, String, i64, i64, bool)>, sqlx::Error> {
+        let mail_expr = Self::metric_expr(mail_axis);
+        let sms_expr = Self::metric_expr(sms_axis);
+        let sql = format!(
+            r#"SELECT m.id,
+                      m.mailing_type::text AS channel,
+                      COALESCE(count(t.id) FILTER (
+                          WHERE t.sent_datetime IS NOT NULL), 0)::bigint AS sent,
+                      COALESCE(count(t.id) FILTER (
+                          WHERE t.sent_datetime IS NOT NULL
+                            AND CASE WHEN m.mailing_type = 'sms'
+                                     THEN {sms_expr}
+                                     ELSE {mail_expr} END), 0)::bigint AS hits,
+                      (m.metadata ? 'send_error') AS parked
+               FROM mailing.mailings m
+               LEFT JOIN mailing.mailing_traces t
+                 ON t.mailing_id = m.id
+                AND (t.metadata->>'deleted_at') IS NULL
+               WHERE m.ab_test_id = $1
+                 AND (m.metadata->>'deleted_at') IS NULL
+               GROUP BY m.id, m.mailing_type
+               ORDER BY m.id"#
+        );
+        sqlx::query_as::<_, (Uuid, String, i64, i64, bool)>(&sql)
             .bind(ab_test_id)
             .fetch_all(&mut *conn)
             .await

@@ -19,8 +19,12 @@
 #    (422) at create/update and parks the mailing at send with zero sends
 #    (the silent zero-recipient send class is closed by construction).
 #  - target_model is the polymorphic recipient marker modeled as a CLOSED
-#    ENUM + a resolver contract (mailing-local contact resolver; party
-#    resolver via the host-composed port) — NOT a meta-model registry column.
+#    ENUM + a per-target resolver contract (mailing-local contact resolver;
+#    every external target — party, crm_lead, crm_deal, selling_customer —
+#    via its own host-composed resolver port) — NOT a meta-model registry
+#    column. The cycle-44 bridges (mass_mailing_crm, mass_mailing_sale)
+#    land as enum values + typed default-domain providers, never twin
+#    modules; the *_sms twins ride the same targets on the sms channel.
 #  - campaign/medium/source are one-way logical uuid refs into engagement's
 #    attribution masters (the v19 collapse: EngagementCampaign IS the campaign
 #    entity). The write verb resolves-or-requires them; NO create-inside-a-
@@ -111,7 +115,7 @@ models:
         attributes: ["@required", "@default(mailing_contact)"]
         lifecycle:
           shape: inert
-        description: "The recipient population: mailing_contact (resolved mailing-locally) or party (resolved through the host-composed party resolver port). A closed capability enum — NOT a meta-model registry (upstream's ir.model column does not port)."
+        description: "The recipient population: mailing_contact (resolved mailing-locally), party (host-composed party resolver port), or one of the cycle-44 bridge targets — crm_lead / crm_deal (the mass_mailing_crm overlay) and selling_customer (the mass_mailing_sale overlay), each resolved through its own host-composed per-target resolver port. A closed capability enum — NOT a meta-model registry (upstream's ir.model column does not port; MVX-1 forbids any registry scan)."
       mailing_domain:
         type: json
         attributes: ["@required", "@default('{}')"]
@@ -210,10 +214,16 @@ enums:
         description: "Outbound SMS through the mail module's sms gateway (asynchronous done — the delivery-tracker pump infers it from sms_trackers once no trace remains un-dispatched)"
 
   - name: MailingTargetModel
-    description: "The recipient population as a closed capability enum + resolver contract (mailing-local contact resolver; party resolver via the host-composed port) — not a meta-model registry"
+    description: "The recipient population as a closed capability enum + per-target resolver contract (mailing-local contact resolver; every external target through its own host-composed resolver port) — not a meta-model registry. The mass_mailing_crm / mass_mailing_sale overlays (cycle 44) land here as enum values, never as twin modules: the *_sms twins ride the SAME targets on the existing sms channel (single-value channel enums)."
     variants:
       - name: mailing_contact
         description: "mailing.mailing_contacts — resolved mailing-locally"
         default: true
       - name: party
         description: "party parties — resolved through the host-composed party resolver port"
+      - name: crm_lead
+        description: "crm leads — the mass_mailing_crm bridge target; resolved through the host-composed crm-lead resolver port. Upstream ships NO default domain for leads (the mailing's own domain applies) — the typed default-domain provider mirrors that."
+      - name: crm_deal
+        description: "crm deals — the mass_mailing_crm bridge target's second arm (no upstream twin exists; follows the lead posture); resolved through the host-composed crm-deal resolver port."
+      - name: selling_customer
+        description: "selling customers — the mass_mailing_sale bridge target; resolved through the host-composed selling-customer resolver port. The typed default-domain provider applies the exclusion policy (customers without a mail address) when the domain arrives empty."

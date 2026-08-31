@@ -31,6 +31,10 @@ fn domain_cmd(audience_id: Uuid, subject: &str) -> MailingUpsertCommand {
         schedule_date: None,
         use_exclusion_list: true,
         campaign_id: None,
+        source_id: None,
+        ab_test_id: None,
+        ab_testing_enabled: false,
+        ab_testing_pc: 0,
     }
 }
 
@@ -310,6 +314,10 @@ async fn suppression_is_visible_never_silent() {
         schedule_date: None,
         use_exclusion_list: true,
         campaign_id: None,
+        source_id: None,
+        ab_test_id: None,
+        ab_testing_enabled: false,
+        ab_testing_pc: 0,
     };
     let party_svc = MailingWriteService::new(db.pool.clone())
         .with_event_sink(sink.clone())

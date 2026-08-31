@@ -27,6 +27,10 @@ fn variant_cmd(audience_id: Uuid, campaign_id: Uuid, subject: &str) -> MailingUp
         schedule_date: None,
         use_exclusion_list: true,
         campaign_id: Some(campaign_id),
+        source_id: None,
+        ab_test_id: None,
+        ab_testing_enabled: false,
+        ab_testing_pc: 0,
     }
 }
 

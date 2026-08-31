@@ -50,6 +50,7 @@ pub struct MailingAbTestDto {
     pub id: MailingAbTestId,
     pub campaign_id: Uuid,
     pub winner_selection: AbWinnerSelection,
+    pub winner_selection_sms: Option<AbWinnerSelection>,
     pub promote_at: Option<DateTime<Utc>>,
     pub completed: bool,
     pub winner_mailing_id: Option<Uuid>,

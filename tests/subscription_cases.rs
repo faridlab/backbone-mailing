@@ -144,6 +144,10 @@ async fn optout_wins_across_lists_at_send_time() {
         schedule_date: None,
         use_exclusion_list: true,
         campaign_id: None,
+        source_id: None,
+        ab_test_id: None,
+        ab_testing_enabled: false,
+        ab_testing_pc: 0,
     };
     let id = engine.create_mailing(&cmd).await.expect("create");
     engine.launch(id, "immediate", None).await.expect("launch");
@@ -187,6 +191,10 @@ async fn archive_guard_refuses_while_a_mailing_cites_the_audience() {
         schedule_date: None,
         use_exclusion_list: true,
         campaign_id: None,
+        source_id: None,
+        ab_test_id: None,
+        ab_testing_enabled: false,
+        ab_testing_pc: 0,
     };
     let id = engine.create_mailing(&cmd).await.expect("create");
     engine.launch(id, "immediate", None).await.expect("launch");

@@ -1,8 +1,8 @@
 [package]
 name = "backbone-mailing"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
-description = "Email marketing — mass-mail engine: audiences, subscriptions, hand-set mailing lifecycle, seeded A/B testing, per-recipient traces (Odoo mass_mailing port)"
+description = "Email marketing — mass-mail engine: audiences, subscriptions, hand-set mailing lifecycle, seeded A/B testing, per-recipient traces, cycle-44 bridge targets (Odoo mass_mailing port)"
 
 [lib]
 path = "src/lib.rs"
@@ -26,11 +26,15 @@ backbone-messaging = { git = "https://github.com/faridlab/backbone-framework", t
 backbone-rate-limit = { git = "https://github.com/faridlab/backbone-framework", tag = "v2.7.11" }
 
 # Sibling modules consumed through their public service surfaces: mail owns
-# the outgoing queue the send engine enqueues into (plus the email blacklist).
-# Campaign/utm masters and the short-link click seam stay in backbone-
-# engagement and are reached through one-way logical uuid refs — no code dep
-# and no DB FK crosses a schema boundary.
-backbone-mail = { path = "../backbone-mail" }
+# the outgoing queue the send engine enqueues into (plus the email blacklist
+# and the sms gateway the sms channel rides). Pinned to the public tag so a
+# host consuming THIS module as a git dependency resolves ONE copy of mail
+# (tag-equal with the app pin — the composition rule mailing>=v0.2.0 needs
+# mail>=v0.2.5; this equals the host's current mail pin). Campaign/utm
+# masters and the short-link click seam stay in backbone-engagement and are
+# reached through one-way logical uuid refs — no code dep and no DB FK
+# crosses a schema boundary.
+backbone-mail = { git = "https://github.com/faridlab/backbone-mail", tag = "v0.2.6" }
 
 # Core async runtime and serialization
 tokio = { version = "1.0", features = ["full"] }

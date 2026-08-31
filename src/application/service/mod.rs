@@ -20,6 +20,7 @@ pub mod mailing_filter_service;
 pub mod ab_test_write_service;
 pub mod mailing_stats_read_service;
 pub mod mailing_write_service;
+pub mod sale_invoiced_amount_port;
 pub mod sms_delivery_pump_service;
 pub mod sms_stop_service;
 pub mod sms_suppression_service;
@@ -38,11 +39,21 @@ pub use mailing_service::MailingService;
 pub use mailing_trace_service::MailingTraceService;
 pub use mailing_filter_service::MailingFilterService;
 // <<< CUSTOM
-pub use ab_test_write_service::{AbTestView, AbTestWriteError, AbTestWriteService};
-pub use mailing_stats_read_service::{MailingStats, MailingStatsError, MailingStatsReadService};
+pub use ab_test_write_service::{
+    AbTestView, AbTestWriteError, AbTestWriteService, ChannelMetricRow, MixedChannelComparison,
+};
+pub use mailing_stats_read_service::{
+    MailingStats, MailingStatsError, MailingStatsReadService, SHARED_SOURCE_CAVEAT,
+    SourceGroupedStats,
+};
 pub use mailing_write_service::{
     AutoBlacklistConfig, DomainInvalid, MailingEventSink, MailingSendConfig, MailingUpsertCommand,
-    MailingWriteError, MailingWriteService, PartyRecipientResolver, SweepOutcome, TracingEventSink,
+    MailingWriteError, MailingWriteService, PartyRecipientResolver, SweepOutcome,
+    TargetRecipientResolver, TracingEventSink, default_domain_for,
+};
+pub use sale_invoiced_amount_port::{
+    CannedSaleInvoicedAmount, RefusingSaleInvoicedAmount, SaleInvoicedAmountError,
+    SaleInvoicedAmountPort, SaleInvoicedAmountSlot, SourceInvoicedAmount,
 };
 pub use subscription_write_service::{SubscriptionWriteError, SubscriptionWriteService};
 pub use sms_delivery_pump_service::{SmsDeliveryPumpService, SmsPumpOutcome};

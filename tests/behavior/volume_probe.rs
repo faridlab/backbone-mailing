@@ -133,6 +133,10 @@ async fn campaign_scale_send_keeps_batch_shape_pacing_and_the_fence() {
             schedule_date: None,
             use_exclusion_list: true,
             campaign_id: None,
+            source_id: None,
+            ab_test_id: None,
+            ab_testing_enabled: false,
+            ab_testing_pc: 0,
         })
         .await
         .expect("create");

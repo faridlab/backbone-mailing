@@ -24,6 +24,26 @@
 #  - Upstream's DORMANT second cron (the daily A/B winner promotion job) is
 #    NOT ported as its own cron: winner auto-promotion is an ordered,
 #    idempotent step inside the ONE send sweep (schema/hooks/index.hook.yaml).
+#  - CYCLE-44 BRIDGE METRICS (MVX-1/MVX-4): the winner-metric fields are
+#    DECLARATIVE columns here (upstream monkey-patches selection values onto
+#    utm.campaign per bridge addon; the port closes the enum once). Only
+#    metrics backed by STORED numbers or a DECLARED seam rank: the trace
+#    ratios (opened/clicks/replied) sort stored numbers, and the bridge's
+#    invoiced-amount axis reads through the sale_invoiced_amount PORT
+#    (billing-side, deny-by-default, zero billing Cargo edge — never a
+#    cross-schema raw read). Upstream's crm_lead_count / sale_quotation_count
+#    winner axes do NOT port: they are live sudo'ed grouped reads over the
+#    bridge host's tables (MVX-1's sort-sudo'ed-recordset-by-field-NAME class)
+#    and no stored mailing-side number backs them.
+#  - THE PARALLEL SMS AXIS (MVX-2): winner_selection_sms is the typed twin of
+#    upstream's ab_testing_sms_winner_selection — the SAME enum on a parallel
+#    nullable column, no twin module. It declares the sms channel's ranking
+#    axis for the mixed-channel compare action; an UNSET axis means the sms
+#    variants rank by the mail axis's stored numbers. Honest limitation: sms
+#    variants rank on whatever traces exist — the sms send walk is not
+#    composed at the mail seam and PARKS loudly (see mailing_write_service),
+#    so an sms variant typically carries zero traces and ranks last (None
+#    ratio, never a fake 0%) until that walk lands.
 # =============================================================================
 
 models:
@@ -43,7 +63,10 @@ models:
       winner_selection:
         type: AbWinnerSelection
         attributes: ["@required", "@default(opened_ratio)"]
-        description: "The metric the promotion step ranks done siblings by (manual defers to the operator verb)."
+        description: "The metric the promotion step ranks done siblings by (manual defers to the operator verb). Trace ratios sort STORED numbers (MVX-1); the bridge's sale_invoiced_amount axis attributes by UTM SOURCE through the declared billing-side seam port (MVX-4 — never a cross-schema raw read)."
+      winner_selection_sms:
+        type: AbWinnerSelection?
+        description: "The PARALLEL sms-channel ranking axis (MVX-2 — upstream's ab_testing_sms_winner_selection): the same enum on its own nullable column, no twin module. Declares how sms-type variants rank in the mixed-channel compare action; unset means the sms variants rank by the mail axis. Sms variants rank on whatever traces exist (the sms send walk parks loudly today — zero traces rank last as a None ratio, never a fake 0%)."
       promote_at:
         type: datetime?
         description: "Earliest auto-promotion time — the sweep's promotion step picks tests past this stamp with at least one done sibling."
@@ -76,7 +99,7 @@ models:
 
 enums:
   - name: AbWinnerSelection
-    description: "The winner-selection metric — the promotion step ranks done siblings by this key (manual defers to the operator)"
+    description: "The winner-selection metric — the promotion step ranks done siblings by this key (manual defers to the operator). A CLOSED enum declared once (MVX-1: no per-bridge selection_add); every ranking axis is either stored trace numbers or a declared seam"
     variants:
       - name: manual
         description: "An operator promotes explicitly (the promotion verb)"
@@ -87,3 +110,5 @@ enums:
         description: "Highest clicks ratio wins (computed from trace links_click_datetime)"
       - name: replied_ratio
         description: "Highest replied ratio wins"
+      - name: sale_invoiced_amount
+        description: "Highest invoiced total attributed by UTM SOURCE wins (the mass_mailing_sale bridge axis, MVX-4): each variant ranks by the invoiced amount its cited engagement source carries, read through the DECLARED billing-side seam port — deny-by-default, zero billing Cargo edge, never a cross-schema raw read. A variant citing no source ranks last; an uncomposed seam skips promotion loudly rather than promoting on a fake zero."

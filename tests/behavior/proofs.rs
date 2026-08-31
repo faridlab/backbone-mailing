@@ -39,6 +39,10 @@ fn audience_cmd(audience_id: Uuid, subject: &str) -> MailingUpsertCommand {
         schedule_date: None,
         use_exclusion_list: true,
         campaign_id: None,
+        source_id: None,
+        ab_test_id: None,
+        ab_testing_enabled: false,
+        ab_testing_pc: 0,
     }
 }
 

@@ -56,11 +56,44 @@ pub struct AbTestView {
     pub id: Uuid,
     pub campaign_id: Uuid,
     pub winner_selection: String,
+    /// The PARALLEL sms-channel axis (MVX-2) — None means the sms variants
+    /// rank by the mail axis.
+    pub winner_selection_sms: Option<String>,
     pub promote_at: Option<chrono::DateTime<chrono::Utc>>,
     pub completed: bool,
     pub winner_mailing_id: Option<Uuid>,
     pub sampling_seed: String,
     pub variants: Vec<(Uuid, String)>,
+}
+
+/// One variant's row in the mixed-channel comparison — STORED trace
+/// numbers per channel, each channel ranked by its own declared axis.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChannelMetricRow {
+    pub mailing_id: Uuid,
+    /// 'mail' | 'sms' — the variant's channel.
+    pub channel: String,
+    /// Traces that were ever submitted (the ranking denominator).
+    pub sent: i64,
+    /// Traces hitting the channel's declared axis.
+    pub hits: i64,
+    /// hits/sent percent — None when nothing was sent (no fake 0%).
+    pub ratio: Option<i64>,
+    /// The variant is currently parked on a send error — the sms send
+    /// walk's loud park (an sms variant typically carries ZERO traces until
+    /// that walk is composed; it ranks on whatever traces exist).
+    pub parked: bool,
+}
+
+/// The mixed-channel comparison (MVX-2's compare action): every variant of
+/// a test, split per channel, ranked on stored numbers by each channel's
+/// own axis.
+#[derive(Debug, Clone)]
+pub struct MixedChannelComparison {
+    pub ab_test_id: Uuid,
+    pub winner_selection: String,
+    pub winner_selection_sms: Option<String>,
+    pub rows: Vec<ChannelMetricRow>,
 }
 
 /// The A/B test verbs. Stateless over a pool; one transaction per verb.
@@ -83,10 +116,12 @@ impl AbTestWriteService {
         promote_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Uuid, AbTestWriteError> {
         let selection = match winner_selection {
-            "manual" | "opened_ratio" | "clicks_ratio" | "replied_ratio" => winner_selection,
+            "manual" | "opened_ratio" | "clicks_ratio" | "replied_ratio"
+            | "sale_invoiced_amount" => winner_selection,
             other => {
                 return Err(AbTestWriteError::Invalid(format!(
-                    "winner_selection must be manual | opened_ratio | clicks_ratio | replied_ratio, not {other}"
+                    "winner_selection must be manual | opened_ratio | clicks_ratio | \
+                     replied_ratio | sale_invoiced_amount, not {other}"
                 )))
             }
         };
@@ -172,6 +207,7 @@ impl AbTestWriteService {
             id,
             campaign_id,
             winner_selection,
+            winner_selection_sms,
             promote_at,
             completed,
             winner_mailing_id,
@@ -184,11 +220,104 @@ impl AbTestWriteService {
             id,
             campaign_id,
             winner_selection,
+            winner_selection_sms,
             promote_at,
             completed,
             winner_mailing_id,
             sampling_seed,
             variants,
+        })
+    }
+
+    /// Declare the PARALLEL sms winner axis (MVX-2 — upstream's
+    /// `ab_testing_sms_winner_selection`): the same closed enum, set
+    /// independently of the mail axis. Unset means the sms variants rank by
+    /// the mail axis. Refused once the test completes (the axes are then
+    /// historical record).
+    pub async fn set_sms_winner_selection(
+        &self,
+        ab_test_id: Uuid,
+        selection: &str,
+    ) -> Result<(), AbTestWriteError> {
+        let parsed = match selection {
+            "manual" | "opened_ratio" | "clicks_ratio" | "replied_ratio"
+            | "sale_invoiced_amount" => selection,
+            other => {
+                return Err(AbTestWriteError::Invalid(format!(
+                    "winner_selection_sms must be manual | opened_ratio | clicks_ratio | \
+                     replied_ratio | sale_invoiced_amount, not {other}"
+                )))
+            }
+        };
+        let mut tx = self.pool.begin().await?;
+        let stamped =
+            MailingSendRepository::set_ab_test_sms_selection(&mut tx, ab_test_id, parsed).await?;
+        tx.commit().await?;
+        if stamped {
+            Ok(())
+        } else {
+            match self.live_test_exists(ab_test_id).await {
+                Some(true) => Err(AbTestWriteError::Conflict(format!(
+                    "ab test {ab_test_id} is already completed — its axes are historical record"
+                ))),
+                _ => Err(AbTestWriteError::NotFound(format!("ab test {ab_test_id}"))),
+            }
+        }
+    }
+
+    async fn live_test_exists(&self, ab_test_id: Uuid) -> Option<bool> {
+        let mut tx = self.pool.begin().await.ok()?;
+        let row = MailingSendRepository::find_ab_test(&mut tx, ab_test_id).await.ok()?;
+        tx.commit().await.ok();
+        Some(row.is_some())
+    }
+
+    /// The MIXED-CHANNEL COMPARE action (MVX-2): every live variant of the
+    /// test, split per channel, each channel ranked on STORED trace numbers
+    /// by its own declared axis (the sms axis falls back to the mail axis
+    /// when unset). Channel-blind by construction — the same numbers the
+    /// promotion walk ranks. Honest limitation carried in the rows: an sms
+    /// variant ranks on whatever traces exist (the sms send walk parks
+    /// loudly today), surfacing as `parked: true` and a `None` ratio —
+    /// never a fabricated 0%.
+    pub async fn compare_channels(
+        &self,
+        ab_test_id: Uuid,
+    ) -> Result<MixedChannelComparison, AbTestWriteError> {
+        let mut tx = self.pool.begin().await?;
+        let row = MailingSendRepository::find_ab_test(&mut tx, ab_test_id).await?;
+        let Some((_, _, winner_selection, winner_selection_sms, ..)) = row else {
+            tx.rollback().await?;
+            return Err(AbTestWriteError::NotFound(format!("ab test {ab_test_id}")));
+        };
+        let sms_axis =
+            winner_selection_sms.clone().unwrap_or_else(|| winner_selection.clone());
+        let raw = MailingSendRepository::mixed_channel_metric_rows(
+            &mut tx,
+            ab_test_id,
+            &winner_selection,
+            &sms_axis,
+        )
+        .await?;
+        tx.commit().await?;
+        let rows = raw
+            .into_iter()
+            .map(|(mailing_id, channel, sent, hits, parked)| ChannelMetricRow {
+                mailing_id,
+                channel,
+                ratio: (sent > 0).then(|| {
+                    (hits as f64 * 100.0 / sent as f64).round() as i64
+                }),
+                sent,
+                hits,
+                parked,
+            })
+            .collect();
+        Ok(MixedChannelComparison {
+            ab_test_id,
+            winner_selection,
+            winner_selection_sms,
+            rows,
         })
     }
 
@@ -202,7 +331,7 @@ impl AbTestWriteService {
     ) -> Result<Option<Uuid>, AbTestWriteError> {
         let mut tx = self.pool.begin().await?;
         let test = MailingSendRepository::find_ab_test(&mut tx, ab_test_id).await?;
-        let Some((_, _, selection, _, completed, _, _)) = test else {
+        let Some((_, _, selection, _, _, completed, _, _)) = test else {
             tx.rollback().await?;
             return Err(AbTestWriteError::NotFound(format!("ab test {ab_test_id}")));
         };

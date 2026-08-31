@@ -46,6 +46,7 @@ pub struct MailingAbTestPaginatedResult {
 pub struct MailingAbTestFilter {
     pub campaign_id: Option<Uuid>,
     pub winner_selection: Option<AbWinnerSelection>,
+    pub winner_selection_sms: Option<AbWinnerSelection>,
     pub completed: Option<bool>,
     pub winner_mailing_id: Option<Uuid>,
     pub sampling_seed: Option<String>,
@@ -54,7 +55,7 @@ pub struct MailingAbTestFilter {
 impl MailingAbTestFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
-        self.campaign_id.is_some() || self.winner_selection.is_some() || self.completed.is_some() || self.winner_mailing_id.is_some() || self.sampling_seed.is_some()
+        self.campaign_id.is_some() || self.winner_selection.is_some() || self.winner_selection_sms.is_some() || self.completed.is_some() || self.winner_mailing_id.is_some() || self.sampling_seed.is_some()
     }
 }
 

@@ -622,6 +622,62 @@ impl TraceRepository {
             })
             .collect())
     }
+
+    /// The source-grouped audit read (MVX-4): aggregate the trace metrics of
+    /// the given mailings grouped by the engagement SOURCE each mailing
+    /// cites — winner metrics attribute by utm source, not campaign. The
+    /// `campaigns` arm counts the DISTINCT campaigns served by each source
+    /// across ALL live mailings citing it (not just the queried set — the
+    /// shared-source property belongs to the source, not the query), so the
+    /// read can surface the shared-source caveat: one source may serve
+    /// several campaigns, and its totals are NOT any single campaign's.
+    /// Returns (source_id, campaigns, mailings, total, sent, opened,
+    /// clicked, replied). Mailings citing no source are out of this read —
+    /// they attribute nothing.
+    #[allow(clippy::type_complexity)]
+    pub async fn source_grouped_counts(
+        conn: &mut PgConnection,
+        mailing_ids: &[Uuid],
+    ) -> Result<Vec<(Uuid, i64, i64, i64, i64, i64, i64, i64)>, sqlx::Error> {
+        sqlx::query_as::<_, (Uuid, i64, i64, i64, i64, i64, i64, i64)>(
+            r#"WITH scope AS (
+                   SELECT m.id, m.source_id
+                   FROM mailing.mailings m
+                   WHERE m.id = ANY($1)
+                     AND m.source_id IS NOT NULL
+                     AND (m.metadata->>'deleted_at') IS NULL
+               ),
+               per_source AS (
+                   SELECT s.source_id,
+                          count(DISTINCT t.mailing_id) AS mailings,
+                          count(*) FILTER (WHERE t.trace_status <> 'cancel') AS total,
+                          count(*) FILTER (WHERE t.sent_datetime IS NOT NULL) AS sent,
+                          count(*) FILTER (WHERE t.trace_status IN ('open', 'reply')) AS opened,
+                          count(*) FILTER (WHERE t.links_click_datetime IS NOT NULL) AS clicked,
+                          count(*) FILTER (WHERE t.trace_status = 'reply') AS replied
+                   FROM scope s
+                   JOIN mailing.mailing_traces t ON t.mailing_id = s.id
+                    AND (t.metadata->>'deleted_at') IS NULL
+                   GROUP BY s.source_id
+               ),
+               source_campaigns AS (
+                   SELECT m.source_id, count(DISTINCT m.campaign_id) AS campaigns
+                   FROM mailing.mailings m
+                   WHERE m.source_id IN (SELECT source_id FROM per_source)
+                     AND m.campaign_id IS NOT NULL
+                     AND (m.metadata->>'deleted_at') IS NULL
+                   GROUP BY m.source_id
+               )
+               SELECT p.source_id, COALESCE(c.campaigns, 0), p.mailings, p.total,
+                      p.sent, p.opened, p.clicked, p.replied
+               FROM per_source p
+               LEFT JOIN source_campaigns c ON c.source_id = p.source_id
+               ORDER BY p.source_id"#,
+        )
+        .bind(mailing_ids)
+        .fetch_all(&mut *conn)
+        .await
+    }
 }
 
 /// The delivery-tracker pump's advance-pass row: one transient sms-type

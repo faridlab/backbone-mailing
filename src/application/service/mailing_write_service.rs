@@ -1105,6 +1105,8 @@ impl MailingWriteService {
                 email,
                 None,
                 m.reply_to.as_deref(),
+                // Per-mail custom headers: campaign sends carry none.
+                None,
                 None,
                 Some("mailing"),
                 Some(m.id),

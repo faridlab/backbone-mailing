@@ -12,6 +12,7 @@
 //! `TestDb::dispose()` is the explicit teardown; `Drop` is the leak guard
 //! (best-effort DROP on a throwaway runtime) for tests that panic.
 
+#![expect(clippy::expect_used, reason = "test harness: a panic here names the setup or assertion failure precisely")]
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use std::time::Duration;

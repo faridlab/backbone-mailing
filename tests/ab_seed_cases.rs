@@ -2,6 +2,7 @@
 //! winner promotion, and the one-live-test-per-campaign fence (fresh-DB,
 //! disposable scratch per test).
 
+#![expect(clippy::expect_used, reason = "test harness: a panic here names the setup or assertion failure precisely")]
 #[path = "behavior/common/mod.rs"]
 mod common;
 

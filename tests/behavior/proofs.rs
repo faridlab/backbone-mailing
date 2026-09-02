@@ -16,6 +16,7 @@
 //!    pass budget at most, no `(mailing, recipient)` pair ever duplicates,
 //!    and the final sweep converges to exactly the audience size.
 
+#![expect(clippy::expect_used, reason = "test harness: a panic here names the setup or assertion failure precisely")]
 use super::common::*;
 use backbone_mailing::application::service::mailing_write_service::{
     MailingSendConfig, MailingUpsertCommand, MailingWriteService,

@@ -565,6 +565,7 @@ impl MailingSendRepository {
     /// EXISTS / NOT EXISTS seams. `hard_cap` is the resolver safety ceiling
     /// (a mis-sized domain fails loudly to the caller, never silently
     /// truncates: the engine asserts `len < hard_cap`).
+    #[expect(clippy::expect_used, reason = "the domain grammar guarantees every term in this branch is column-backed")]
     pub async fn resolve_contact_recipients(
         conn: &mut PgConnection,
         domain: &CompiledDomain,

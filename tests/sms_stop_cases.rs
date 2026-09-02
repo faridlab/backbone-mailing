@@ -7,6 +7,7 @@
 //! The pure Tier B refusal corpus lives with the policy (unit tests in
 //! `sms_stop_service.rs`); these are the fresh-DB legs.
 
+#![expect(clippy::expect_used, reason = "test harness: a panic here names the setup or assertion failure precisely")]
 #[path = "behavior/common/mod.rs"]
 mod common;
 

@@ -5,6 +5,7 @@
 //! disposable scratch per test, router driven in-process via tower's
 //! `ServiceExt::oneshot`.
 
+#![expect(clippy::expect_used, reason = "test harness: a panic here names the setup or assertion failure precisely")]
 #[path = "behavior/common/mod.rs"]
 mod common;
 

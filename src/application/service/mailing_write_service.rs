@@ -1267,6 +1267,8 @@ impl MailingWriteService {
                 email,
                 None,
                 m.reply_to.as_deref(),
+                // Per-mail custom headers: campaign sends carry none.
+                None,
                 None,
                 Some("mailing"),
                 Some(m.id),
@@ -1693,6 +1695,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::expect_used, reason = "unit test asserts the compiled-domain contract holds here")]
     fn default_domains_are_declarative_and_whitelist_clean() {
         // Every bridge default parses through the SAME whitelist and
         // round-trips canonically — never an expression string (MVX-5).

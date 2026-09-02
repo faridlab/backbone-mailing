@@ -10,6 +10,7 @@
 //! that would mint them is a separate seam); every delivery verdict after
 //! the enqueue is the substrate's own.
 
+#![expect(clippy::expect_used, reason = "test harness: a panic here names the setup or assertion failure precisely")]
 #[path = "behavior/common/mod.rs"]
 mod common;
 

@@ -264,6 +264,7 @@ mod tests {
     /// upstream shapes mixed-case, whitespace-padded shorts, and
     /// non-alabetic shapes — every one a TYPED refusal with the raw input.
     #[test]
+    #[expect(clippy::expect_used, reason = "unit test asserts the stop-code refusal contract")]
     fn below_floor_corpus_refuses_typed() {
         let corpus = [
             "",

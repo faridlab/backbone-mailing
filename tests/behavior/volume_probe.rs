@@ -15,6 +15,7 @@
 //! - **Seam totality**: at scale, every live outgoing trace carries its
 //!   `messaging.mails` row and every mail row belongs to a trace.
 
+#![expect(clippy::expect_used, reason = "test harness: a panic here names the setup or assertion failure precisely")]
 use super::common::*;
 use backbone_mailing::application::service::mailing_write_service::{
     MailingSendConfig, MailingUpsertCommand, MailingWriteService,

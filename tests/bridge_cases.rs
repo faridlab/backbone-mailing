@@ -3,6 +3,7 @@
 //! declarative default domains, the source-keyed winner-metric reads, the
 //! billing-side invoiced-amount seam, and the parallel sms winner axis.
 
+#![expect(clippy::expect_used, reason = "test harness: a panic here names the setup or assertion failure precisely")]
 #[path = "behavior/common/mod.rs"]
 mod common;
 

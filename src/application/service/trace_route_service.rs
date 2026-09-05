@@ -240,6 +240,12 @@ impl From<crate::application::service::subscription_write_service::SubscriptionW
             E::NotFound(d) => TraceRouteError::Backend(format!("subscription: {d}")),
             E::Conflict(d) => TraceRouteError::Backend(format!("subscription: {d}")),
             E::Invalid(d) => TraceRouteError::Invalid(format!("subscription: {d}")),
+            // The unsubscribe leg never subscribes, so the public-audience
+            // guard cannot fire here; if it ever does, it is a wiring bug on
+            // the route (not caller input) and reports as a backend fault.
+            E::AudienceNotPublic => {
+                TraceRouteError::Backend("subscription: audience is not open".to_string())
+            }
         }
     }
 }

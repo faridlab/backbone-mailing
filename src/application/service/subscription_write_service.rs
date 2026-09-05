@@ -28,6 +28,8 @@ pub enum SubscriptionWriteError {
     Conflict(String),
     #[error("invalid: {0}")]
     Invalid(String),
+    #[error("audience is not open to self-service subscription")]
+    AudienceNotPublic,
 }
 
 impl SubscriptionWriteError {
@@ -37,6 +39,11 @@ impl SubscriptionWriteError {
             Self::NotFound(_) => "not_found",
             Self::Conflict(_) => "audience_in_use",
             Self::Invalid(_) => "invalid_input",
+            // Deliberately ONE code for unknown, archived, and private —
+            // the self-service edge must not let a caller distinguish the
+            // three (the enumeration-oracle posture the whole public
+            // subscription surface carries).
+            Self::AudienceNotPublic => "audience_not_public",
         }
     }
 
@@ -46,6 +53,7 @@ impl SubscriptionWriteError {
             Self::NotFound(_) => 404,
             Self::Conflict(_) => 409,
             Self::Invalid(_) => 422,
+            Self::AudienceNotPublic => 422,
         }
     }
 }
@@ -77,6 +85,17 @@ impl SubscriptionWriteService {
     /// audience. Idempotent — converges onto the existing live row AND
     /// clears any standing opt-out (a re-subscribe is the only sanctioned
     /// way out of an opt-out).
+    ///
+    /// The ONE self-service guard: only PUBLIC audiences are subscribable
+    /// through this verb. The audience model declares the contract
+    /// ("self-service subscriptions only create onto public audiences" —
+    /// `is_public` gates the recipient-facing subscription-preferences
+    /// surface); this is where it is enforced, on the single sanctioned
+    /// subscribe verb, so every composed route inherits the same fence
+    /// instead of each path re-deriving it. Officer-side membership
+    /// management rides the gated generic CRUD, not this verb. A missing
+    /// or archived audience id refuses identically to a private one — the
+    /// caller learns nothing about WHICH ids exist.
     pub async fn subscribe(
         &self,
         email: &str,
@@ -90,6 +109,13 @@ impl SubscriptionWriteService {
             )));
         }
         let mut tx = self.pool.begin().await?;
+        let is_public = SubscriptionRepository::audience_is_public(&mut tx, audience_id)
+            .await?
+            .unwrap_or(false);
+        if !is_public {
+            tx.rollback().await?;
+            return Err(SubscriptionWriteError::AudienceNotPublic);
+        }
         SubscriptionRepository::ensure_default_reasons(&mut tx).await?;
         let contact_id = SubscriptionRepository::upsert_contact(&mut tx, email, name).await?;
         let row = SubscriptionRepository::subscribe(&mut tx, contact_id, audience_id).await?;
@@ -128,38 +154,53 @@ impl SubscriptionWriteService {
     /// The unsubscribe ROUTE seam: arrives with an email (+ the audience
     /// context from the trace). Falls back to the default reason when none
     /// is picked.
+    ///
+    /// Anti-oracle posture: every refusal arm — unknown contact, contact
+    /// with no subscription on this audience — answers the SAME typed
+    /// error. Distinguishable messages here would hand any caller a probe
+    /// for both "is this email a known contact" and "is this email on this
+    /// audience" — the mailing-list membership enumeration the public
+    /// subscription surface must never expose. The distinction stays in
+    /// the server log, never the answer.
     pub async fn unsubscribe_by_email(
         &self,
         email: &str,
         audience_id: Uuid,
         reason_id: Option<Uuid>,
     ) -> Result<(SubscriptionRow, bool), SubscriptionWriteError> {
+        const REFUSAL: &str = "no subscription to unsubscribe";
         let mut tx = self.pool.begin().await?;
         SubscriptionRepository::ensure_default_reasons(&mut tx).await?;
-        let contact_id = SubscriptionRepository::contact_id_by_email(&mut tx, email)
-            .await?
-            .ok_or_else(|| {
-                SubscriptionWriteError::NotFound(format!("contact {email}"))
-            })?;
+        let contact_id = match SubscriptionRepository::contact_id_by_email(&mut tx, email).await? {
+            Some(id) => id,
+            None => {
+                tx.rollback().await?;
+                tracing::debug!(email = %email, "unsubscribe refused: no such contact");
+                return Err(SubscriptionWriteError::NotFound(REFUSAL.to_string()));
+            }
+        };
         let reason = match reason_id {
             Some(r) => Some(r),
             None => SubscriptionRepository::default_reason_id(&mut tx).await?,
         };
         let flipped = SubscriptionRepository::opt_out(&mut tx, contact_id, audience_id, reason)
             .await?;
-        tx.commit().await?;
-        match flipped {
-            Some(row) => Ok((row, true)),
-            None => {
-                let standing = self.find(contact_id, audience_id).await?;
-                match standing {
-                    Some(row) => Ok((row, false)),
-                    None => Err(SubscriptionWriteError::NotFound(format!(
-                        "subscription for {email} on audience {audience_id}"
-                    ))),
-                }
+        if flipped.is_none() {
+            let standing = SubscriptionRepository::find_live(&mut tx, contact_id, audience_id).await?;
+            if standing.is_none() {
+                tx.rollback().await?;
+                tracing::debug!(
+                    email = %email,
+                    audience_id = %audience_id,
+                    "unsubscribe refused: no subscription on this audience"
+                );
+                return Err(SubscriptionWriteError::NotFound(REFUSAL.to_string()));
             }
+            tx.commit().await?;
+            return Ok((standing.expect("checked above"), false));
         }
+        tx.commit().await?;
+        Ok((flipped.expect("checked above"), true))
     }
 
     /// One live subscription row (the read side).

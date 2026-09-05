@@ -18,7 +18,7 @@ async fn subscribe_is_idempotent_and_resubscribe_clears_the_optout() {
         return skipped("sub");
     };
     let svc = SubscriptionWriteService::new(db.pool.clone());
-    let audience = svc.create_audience("Newsletter", false).await.expect("aud");
+    let audience = svc.create_audience("Newsletter", true).await.expect("aud");
 
     let row = svc
         .subscribe("fan@example.id", audience, Some("Fan"))
@@ -70,7 +70,7 @@ async fn repeated_unsubscribe_keeps_the_first_optout_moment() {
         return skipped("opt");
     };
     let svc = SubscriptionWriteService::new(db.pool.clone());
-    let audience = svc.create_audience("Deals", false).await.expect("aud");
+    let audience = svc.create_audience("Deals", true).await.expect("aud");
     svc.subscribe("tired@example.id", audience, None)
         .await
         .expect("sub");
@@ -110,8 +110,8 @@ async fn optout_wins_across_lists_at_send_time() {
         return skipped("wins");
     };
     let subs = SubscriptionWriteService::new(db.pool.clone());
-    let list_a = subs.create_audience("List A", false).await.expect("A");
-    let list_b = subs.create_audience("List B", false).await.expect("B");
+    let list_a = subs.create_audience("List A", true).await.expect("A");
+    let list_b = subs.create_audience("List B", true).await.expect("B");
 
     // Member of BOTH lists; opts out of B only.
     subs.subscribe("dual@example.id", list_a, None)
@@ -213,5 +213,77 @@ async fn archive_guard_refuses_while_a_mailing_cites_the_audience() {
     engine.send_queue_sweep().await.expect("sweep");
     let members = subs.archive_audience(audience_id).await.expect("archive");
     assert_eq!(members, 2);
+    db.dispose().await;
+}
+
+/// The ONE self-service guard: the subscribe verb admits only PUBLIC
+/// audiences, and a private audience, an unknown id, and an archived
+/// audience all refuse with the SAME typed error — the caller cannot
+/// distinguish which id-shape was wrong (the enumeration-oracle posture
+/// the public subscription surface carries).
+#[tokio::test]
+async fn subscribe_refuses_private_and_unknown_audiences_identically() {
+    let Some(db) = TestDb::new("subgate").await else {
+        return skipped("subgate");
+    };
+    let svc = SubscriptionWriteService::new(db.pool.clone());
+
+    let private = svc.create_audience("Members only", false).await.expect("aud");
+    let err = svc
+        .subscribe("fan@example.id", private, None)
+        .await
+        .expect_err("private audience must refuse");
+    assert_eq!(err.http_status(), 422);
+    assert_eq!(err.code(), "audience_not_public");
+
+    let unknown = svc
+        .subscribe("fan@example.id", Uuid::new_v4(), None)
+        .await
+        .expect_err("unknown audience must refuse");
+    assert_eq!(unknown.code(), err.code(), "unknown and private must be indistinguishable");
+    assert_eq!(std::mem::discriminant(&unknown), std::mem::discriminant(&err));
+
+    // The sanctioned shape still passes: a public audience subscribes.
+    let public = svc.create_audience("Open newsletter", true).await.expect("pub");
+    let row = svc
+        .subscribe("fan@example.id", public, None)
+        .await
+        .expect("public audience subscribes");
+    assert!(!row.opt_out);
+    db.dispose().await;
+}
+
+/// The anti-oracle unsubscribe: an unknown contact and a known contact
+/// with no subscription on the audience answer the SAME typed refusal —
+/// the mailing-list membership enumeration the public surface must
+/// never expose.
+#[tokio::test]
+async fn unsubscribe_by_email_conflates_unknown_contact_and_missing_subscription() {
+    let Some(db) = TestDb::new("subconflate").await else {
+        return skipped("subconflate");
+    };
+    let svc = SubscriptionWriteService::new(db.pool.clone());
+    let audience = svc.create_audience("Newsletter", true).await.expect("aud");
+    // A known contact with NO subscription on this audience.
+    let other = svc.create_audience("Other list", true).await.expect("other");
+    svc.subscribe("known@example.id", other, None).await.expect("seed");
+
+    let stranger = svc
+        .unsubscribe_by_email("stranger@example.id", audience, None)
+        .await
+        .expect_err("unknown contact must refuse");
+    let known = svc
+        .unsubscribe_by_email("known@example.id", audience, None)
+        .await
+        .expect_err("known contact without subscription must refuse");
+
+    assert_eq!(stranger.http_status(), 404);
+    assert_eq!(known.http_status(), 404);
+    assert_eq!(
+        format!("{stranger}"),
+        format!("{known}"),
+        "the two refusal arms must be byte-identical to the caller"
+    );
+    assert_eq!(stranger.code(), known.code());
     db.dispose().await;
 }

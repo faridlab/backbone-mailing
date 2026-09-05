@@ -434,8 +434,8 @@ async fn unsubscribe_flips_every_targeted_audience_and_is_idempotent() {
     };
     let campaign = Uuid::new_v4();
     let subscriptions = SubscriptionWriteService::new(db.pool.clone());
-    let audience_a = subscriptions.create_audience("route-case-a", false).await.expect("a");
-    let audience_b = subscriptions.create_audience("route-case-b", false).await.expect("b");
+    let audience_a = subscriptions.create_audience("route-case-a", true).await.expect("a");
+    let audience_b = subscriptions.create_audience("route-case-b", true).await.expect("b");
     subscriptions
         .subscribe("reader@example.id", audience_a, Some("Reader"))
         .await

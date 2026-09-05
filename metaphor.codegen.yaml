@@ -31,6 +31,13 @@ user_owned:
   # traces (failure_type='sms_blacklist').
   - "src/application/service/sms_stop_service.rs"
   - "src/application/service/sms_suppression_service.rs"
+  # The SMS channel's targeting port: one host-composed resolver per
+  # phone-bearing bridge target ('crm_lead'), declaratively keyed by
+  # target_model — the phone twin of the TargetRecipientResolver seam, with
+  # the visible invalid-phone exclusion count (the strict-equality gate's
+  # replacement: eligibility is the sanitizer's verdict, drift is counted,
+  # never silently dropped).
+  - "src/application/service/sms_targeting_service.rs"
 
   # The public /r/:code/m/:trace trace-route family (click + pixel +
   # unsubscribe, the deferred MMF-H seam): the cross-module click seam

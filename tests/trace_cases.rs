@@ -515,3 +515,68 @@ async fn sms_bounce_is_channel_pure_and_never_feeds_the_mail_auto_blacklist() {
     );
     db.dispose().await;
 }
+
+/// The channel-parameterized mints: an sms trace is born with
+/// `trace_type='sms'` and its canonical number, and the fenced variant
+/// absorbs a duplicate as `Ok(false)` inside the same transaction. A
+/// phone-channel trace minted through the mail-shaped verb would be
+/// invisible to the delivery pump's sms-scoped verdict join — the
+/// channel rides the mint.
+#[tokio::test]
+async fn channel_mint_stamps_sms_type_and_phone_and_the_fence_absorbs_duplicates() {
+    let Some(db) = TestDb::new("chmint").await else {
+        return skipped("chmint");
+    };
+    let (trace_id, mailing_id, recipient_id) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+    let mut tx = db.pool.begin().await.expect("tx");
+    TraceRepository::mint_trace_channel(
+        &mut tx,
+        trace_id,
+        mailing_id,
+        None,
+        "crm_lead",
+        recipient_id,
+        "", // a phone-only recipient carries no email anchor
+        Some("+6281234567890"),
+        "sms",
+        "outgoing",
+        None,
+        false,
+    )
+    .await
+    .expect("channel mint");
+    // The fenced twin over the same (mailing, recipient): absorbed, not
+    // an error — the surrounding transaction stays usable.
+    let absorbed = TraceRepository::mint_trace_channel_fenced(
+        &mut tx,
+        Uuid::new_v4(),
+        mailing_id,
+        None,
+        "crm_lead",
+        recipient_id,
+        "",
+        Some("+6281234567890"),
+        "sms",
+        "outgoing",
+        None,
+        false,
+    )
+    .await
+    .expect("fenced channel mint");
+    assert!(!absorbed, "the mint fence absorbs the duplicate");
+    tx.commit().await.expect("commit");
+
+    let row: (String, String, Option<String>, String) = sqlx::query_as(
+        r#"SELECT trace_type::text, trace_status::text, recipient_phone, recipient_email
+           FROM mailing.mailing_traces WHERE id = $1"#,
+    )
+    .bind(trace_id)
+    .fetch_one(&db.pool)
+    .await
+    .expect("channel trace");
+    assert_eq!(row.0, "sms", "the channel rides the mint");
+    assert_eq!(row.1, "outgoing");
+    assert_eq!(row.2.as_deref(), Some("+6281234567890"));
+    assert_eq!(row.3, "", "a phone-only recipient carries the empty anchor");
+    db.dispose().await;
+}

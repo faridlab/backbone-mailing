@@ -24,6 +24,7 @@ pub mod sale_invoiced_amount_port;
 pub mod sms_delivery_pump_service;
 pub mod sms_stop_service;
 pub mod sms_suppression_service;
+pub mod sms_targeting_service;
 pub mod subscription_write_service;
 pub mod trace_click_ports;
 pub mod trace_route_service;
@@ -71,4 +72,5 @@ pub use sms_suppression_service::{
     ClaimedSmsContext, PhoneRecipient, SmsSuppressionError, SmsSuppressionService, Suppressed,
     SuppressionOutcome, SMS_BLACKLIST_FAILURE_TYPE,
 };
+pub use sms_targeting_service::{SmsTargetingReport, TargetPhoneResolver};
 // END CUSTOM

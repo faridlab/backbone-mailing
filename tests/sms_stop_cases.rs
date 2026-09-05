@@ -304,10 +304,15 @@ async fn claim_time_suppression_mints_visible_cancel_traces_for_blacklisted_numb
     assert_eq!(outcome.send_set.len(), TOTAL - BLACKLISTED);
 
     // Every suppression is VISIBLE: exactly one cancel trace each, with the
-    // sms_blacklist cause, carrying the suppressed number's recipient.
+    // sms_blacklist cause, carrying the suppressed number's recipient. The
+    // trace also carries the CHANNEL it belongs to — a suppression trace
+    // stamped trace_type='mail' would be invisible to the delivery pump's
+    // sms-scoped verdict join — and the canonical number (the phone-keyed
+    // lookup arm).
     for s in &outcome.suppressed {
-        let row: (String, Option<String>) = sqlx::query_as(
-            r#"SELECT trace_status::text, failure_type::text
+        let row: (String, Option<String>, String, Option<String>) = sqlx::query_as(
+            r#"SELECT trace_status::text, failure_type::text,
+                      trace_type::text, recipient_phone
                FROM mailing.mailing_traces WHERE id = $1"#,
         )
         .bind(s.trace_id)
@@ -316,6 +321,12 @@ async fn claim_time_suppression_mints_visible_cancel_traces_for_blacklisted_numb
         .expect("suppression trace");
         assert_eq!(row.0, "cancel", "pre-canceled, visible");
         assert_eq!(row.1.as_deref(), Some("sms_blacklist"));
+        assert_eq!(row.2, "sms", "the suppression trace rides the sms channel");
+        assert_eq!(
+            row.3.as_deref(),
+            Some(s.number.to_string().as_str()),
+            "the canonical number rides the trace"
+        );
     }
     let suppressed_ids: HashSet<Uuid> = outcome.suppressed.iter().map(|s| s.recipient_id).collect();
     assert_eq!(suppressed_ids.len(), BLACKLISTED);

@@ -308,6 +308,23 @@ impl SubscriptionRepository {
         .await
     }
 
+    /// The self-service gate's read: one live audience's `is_public`.
+    /// `None` when the audience does not exist (or is archived) — the
+    /// subscribe verb treats that identically to a private audience: the
+    /// self-service surface never reveals WHICH id was wrong.
+    pub async fn audience_is_public(
+        conn: &mut PgConnection,
+        audience_id: Uuid,
+    ) -> Result<Option<bool>, sqlx::Error> {
+        sqlx::query_scalar::<_, bool>(
+            r#"SELECT is_public FROM mailing.mailing_audiences
+               WHERE id = $1 AND (metadata->>'deleted_at') IS NULL"#,
+        )
+        .bind(audience_id)
+        .fetch_optional(&mut *conn)
+        .await
+    }
+
     /// Upsert a contact by email (partial-unique converge) — returns the
     /// contact id. The subscribe verb's first half.
     pub async fn upsert_contact(

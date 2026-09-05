@@ -172,6 +172,105 @@ impl TraceRepository {
         .map(|r| r.is_some())
     }
 
+    /// The channel-parameterized mint: the same row, same fence, with the
+    /// channel (`trace_type`) and the phone-channel's canonical recipient
+    /// number as arguments instead of the hardcoded `'mail'` above.
+    ///
+    /// A suppressed phone recipient's pre-canceled trace mints through HERE
+    /// (`trace_type='sms'`): a phone-channel trace stamped `'mail'` would be
+    /// invisible to the delivery pump's sms-scoped verdict join and miscounted
+    /// by the completion counter — the channel must ride the mint, never the
+    /// caller's assumption. `recipient_phone` is the sanitized E.164 number
+    /// (mail traces pass `None`; the DB CHECK enforces canonical form when
+    /// present). `recipient_email` stays the typed anchor it is on every
+    /// channel — a phone-only recipient carries `""` (never a join key).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn mint_trace_channel(
+        conn: &mut PgConnection,
+        id: Uuid,
+        mailing_id: Uuid,
+        campaign_id: Option<Uuid>,
+        recipient_model: &str,
+        recipient_id: Uuid,
+        recipient_email: &str,
+        recipient_phone: Option<&str>,
+        trace_type: &str,
+        trace_status: &str,
+        failure_type: Option<&str>,
+        is_test_trace: bool,
+    ) -> Result<Uuid, sqlx::Error> {
+        let out = sqlx::query_scalar::<_, Uuid>(
+            r#"INSERT INTO mailing.mailing_traces
+                   (id, trace_type, is_test_trace, mailing_id, campaign_id,
+                    recipient_model, recipient_id, recipient_email,
+                    recipient_phone, trace_status, failure_type, metadata)
+               VALUES ($1, $10::trace_type, $2, $3, $4, $5, $6, $7, $8,
+                       $9::trace_status, $11::trace_failure_type,
+                       jsonb_build_object('created_at', to_jsonb(now())))
+               RETURNING id"#,
+        )
+        .bind(id)
+        .bind(is_test_trace)
+        .bind(mailing_id)
+        .bind(campaign_id)
+        .bind(recipient_model)
+        .bind(recipient_id)
+        .bind(recipient_email)
+        .bind(recipient_phone)
+        .bind(trace_status)
+        .bind(trace_type)
+        .bind(failure_type)
+        .fetch_one(&mut *conn)
+        .await?;
+        Ok(out)
+    }
+
+    /// The fenced channel mint — [`Self::mint_trace_channel`] with the
+    /// batch-transaction fence semantics of [`Self::mint_trace_fenced`]: a
+    /// partial-unique hit is absorbed as `Ok(false)` so one mid-batch fence
+    /// hit cannot poison the surrounding transaction.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn mint_trace_channel_fenced(
+        conn: &mut PgConnection,
+        id: Uuid,
+        mailing_id: Uuid,
+        campaign_id: Option<Uuid>,
+        recipient_model: &str,
+        recipient_id: Uuid,
+        recipient_email: &str,
+        recipient_phone: Option<&str>,
+        trace_type: &str,
+        trace_status: &str,
+        failure_type: Option<&str>,
+        is_test_trace: bool,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar::<_, Uuid>(
+            r#"INSERT INTO mailing.mailing_traces
+                   (id, trace_type, is_test_trace, mailing_id, campaign_id,
+                    recipient_model, recipient_id, recipient_email,
+                    recipient_phone, trace_status, failure_type, metadata)
+               VALUES ($1, $10::trace_type, $2, $3, $4, $5, $6, $7, $8,
+                       $9::trace_status, $11::trace_failure_type,
+                       jsonb_build_object('created_at', to_jsonb(now())))
+               ON CONFLICT DO NOTHING
+               RETURNING id"#,
+        )
+        .bind(id)
+        .bind(is_test_trace)
+        .bind(mailing_id)
+        .bind(campaign_id)
+        .bind(recipient_model)
+        .bind(recipient_id)
+        .bind(recipient_email)
+        .bind(recipient_phone)
+        .bind(trace_status)
+        .bind(trace_type)
+        .bind(failure_type)
+        .fetch_optional(&mut *conn)
+        .await
+        .map(|r| r.is_some())
+    }
+
     // ── the seven set_* verbs (each a rank-guarded conditional UPDATE) ────────
 
     /// `set_process` (SMS channel only) — outgoing → process: the delivery

@@ -414,6 +414,8 @@ pub struct MailingWriteService {
     cfg: MailingSendConfig,
     blacklist_cfg: AutoBlacklistConfig,
     target_resolvers: std::collections::HashMap<String, Arc<dyn TargetRecipientResolver>>,
+    phone_resolvers:
+        std::collections::HashMap<String, Arc<dyn crate::application::service::sms_targeting_service::TargetPhoneResolver>>,
     invoiced_amounts: Arc<dyn crate::application::service::sale_invoiced_amount_port::SaleInvoicedAmountPort>,
     events: Arc<dyn MailingEventSink>,
     messages: MessageWriteService,
@@ -431,6 +433,7 @@ impl MailingWriteService {
             cfg: MailingSendConfig::default(),
             blacklist_cfg: AutoBlacklistConfig::default(),
             target_resolvers: std::collections::HashMap::new(),
+            phone_resolvers: std::collections::HashMap::new(),
             invoiced_amounts: Arc::new(
                 crate::application::service::sale_invoiced_amount_port::RefusingSaleInvoicedAmount,
             ),
@@ -467,6 +470,28 @@ impl MailingWriteService {
         self.target_resolvers
             .insert(r.target_model().to_string(), r);
         self
+    }
+
+    /// Compose ONE phone-bearing target's SMS targeting resolver — the
+    /// phone-channel twin of [`Self::with_target_resolver`]. Registrations
+    /// are keyed by `target_model` exactly like the email arm; a target
+    /// whose phone resolver is absent when the (DIT #231) sms send walk
+    /// composes will PARK loudly, the same never-silent contract.
+    pub fn with_phone_resolver(
+        mut self,
+        r: Arc<dyn crate::application::service::sms_targeting_service::TargetPhoneResolver>,
+    ) -> Self {
+        self.phone_resolvers.insert(r.target_model().to_string(), r);
+        self
+    }
+
+    /// The composed phone resolver for one target_model, if any — the
+    /// composition probe + the (DIT #231) sms send walk's lookup arm.
+    pub fn phone_resolver_for(
+        &self,
+        target_model: &str,
+    ) -> Option<Arc<dyn crate::application::service::sms_targeting_service::TargetPhoneResolver>> {
+        self.phone_resolvers.get(target_model).cloned()
     }
 
     /// Compose the billing-side seam for the `sale_invoiced_amount` winner

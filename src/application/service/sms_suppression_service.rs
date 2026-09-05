@@ -59,8 +59,10 @@ pub struct PhoneRecipient {
 pub struct ClaimedSmsContext {
     pub mailing_id: Uuid,
     pub campaign_id: Option<Uuid>,
-    /// Mirrors the mailing's target_model ('mailing_contact' | 'party') at
-    /// mint time — the trace's recipient anchor.
+    /// Mirrors the mailing's target_model at mint time — the trace's
+    /// recipient anchor. Any phone-bearing target the sms channel can
+    /// resolve ('mailing_contact', 'party', or an external bridge target
+    /// such as 'crm_lead' composed through the targeting port).
     pub recipient_model: String,
 }
 
@@ -148,8 +150,13 @@ impl SmsSuppressionService {
                 // Status 'cancel' at mint — the mail engine's suppression
                 // block shape: the trace is BORN canceled (there is no
                 // outgoing row to retire), outside the mint fence by the
-                // partial unique's carve-out.
-                TraceRepository::mint_trace(
+                // partial unique's carve-out. The CHANNEL-PARAMETERIZED mint:
+                // a suppression trace stamped trace_type='mail' would be
+                // invisible to the delivery pump's sms-scoped verdict join
+                // and miscounted by the completion counter — the channel
+                // rides the mint, and the canonical number rides with it
+                // (the phone-keyed lookup arm of the trace).
+                TraceRepository::mint_trace_channel(
                     &mut tx,
                     trace_id,
                     ctx.mailing_id,
@@ -157,6 +164,8 @@ impl SmsSuppressionService {
                     &ctx.recipient_model,
                     recipient.recipient_id,
                     &recipient.email,
+                    Some(&recipient.number.to_string()),
+                    "sms",
                     "cancel",
                     Some(SMS_BLACKLIST_FAILURE_TYPE),
                     false,

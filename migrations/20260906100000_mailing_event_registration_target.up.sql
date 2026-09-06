@@ -1,0 +1,21 @@
+-- The mass_mailing_event bridge target's schema delta (one enum value).
+--
+-- Zero NEW tables: the events-registrations consumer bridge lands as a
+-- CLOSED-ENUM target value + a host-composed resolver port
+-- (schema/models/mailing.model.yaml is the source of truth; this file is
+-- its DB expression, user_owned under the
+-- migrations/*event_registration_target* glob).
+--
+-- MECHANICS (hard constraint, the bridge_targets precedent): NO statement
+-- in this file USES the newly added enum value. Postgres refuses a new
+-- enum value inside the transaction that added it, and both runners
+-- (sqlx::migrate's per-file transaction; the behavior harness's single
+-- raw_sql batch) are one-transaction-per-file. The statement here is a
+-- value-only ALTER TYPE.
+--
+-- The *_sms twin rides the SAME value on the existing sms channel — no
+-- twin enum, no twin module. No track-shaped values are added: the track
+-- twins are deferred by owner ruling until a tracks substrate is ratified
+-- in the events module.
+
+ALTER TYPE mailing_target_model ADD VALUE IF NOT EXISTS 'event_registration';

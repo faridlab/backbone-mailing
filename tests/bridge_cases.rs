@@ -15,14 +15,18 @@ use backbone_mailing::application::service::mailing_stats_read_service::{
     MailingStatsReadService, SHARED_SOURCE_CAVEAT,
 };
 use backbone_mailing::application::service::mailing_write_service::{
-    MailingUpsertCommand, MailingWriteError, MailingWriteService, PartyRecipientResolver,
-    TargetRecipientResolver,
+    DomainInvalid, MailingUpsertCommand, MailingWriteError, MailingWriteService,
+    PartyRecipientResolver, TargetRecipientResolver,
 };
 use backbone_mailing::application::service::sale_invoiced_amount_port::{
     SaleInvoicedAmountError, SaleInvoicedAmountPort, SourceInvoicedAmount,
 };
+use backbone_mailing::application::service::{
+    EventRegistrationTargetError, EventRegistrationTargetResolver,
+    RefusingEventRegistrationTarget,
+};
 use backbone_mailing::infrastructure::persistence::mailing_send_repository::{
-    CompiledDomain, ResolvedRecipient,
+    CompiledDomain, DomainField, DomainOp, ResolvedRecipient,
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -735,5 +739,414 @@ async fn sms_winner_axis_and_mixed_channel_compare() {
     assert_eq!(sms.hits, 0);
     assert_eq!(sms.ratio, None, "no fabricated 0% — nothing was sent");
     assert!(sms.parked, "the parked sms variant says so in its row");
+    db.dispose().await;
+}
+
+// ── (11) the events-registrations bridge target (mass_mailing_event) ────────
+
+/// Apply the events module's migrations to this test's scratch database
+/// (the harness's own raw-SQL runner shape, scoped to this probe family
+/// only — the shared dirs array stays untouched). The events migrations
+/// are self-contained (schema `event`, no cross-schema references), so a
+/// bare scratch database applies them cleanly. The events module is NOT a
+/// Cargo dependency of this crate: the probe reads its registration read
+/// model through SQL only, exactly like the host-composed adapter does.
+async fn apply_events_migrations(pool: &sqlx::PgPool, marker: &str) -> bool {
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    let dir = format!("{manifest}/../backbone-events/migrations");
+    let mut files: Vec<std::path::PathBuf> = match std::fs::read_dir(&dir) {
+        Ok(rd) => rd
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.ends_with(".up.sql"))
+                    .unwrap_or(false)
+            })
+            .collect(),
+        Err(e) => {
+            eprintln!("SKIPPED-DB: {marker}: cannot read {dir}: {e}");
+            return false;
+        }
+    };
+    files.sort();
+    let mut conn = match pool.acquire().await {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("SKIPPED-DB: {marker}: cannot acquire pool conn: {e}");
+            return false;
+        }
+    };
+    for file in files {
+        let sql = match std::fs::read_to_string(&file) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("SKIPPED-DB: {marker}: cannot read {}: {e}", file.display());
+                return false;
+            }
+        };
+        if let Err(e) = sqlx::raw_sql(&sql).execute(&mut *conn).await {
+            eprintln!("SKIPPED-DB: {marker}: migration {} failed: {e}", file.display());
+            return false;
+        }
+    }
+    true
+}
+
+/// Seed one event row and return its id (registrations carry a real FK to
+/// it, RESTRICT). The event's own stage FK is satisfied by a seeded stage.
+async fn seed_event(pool: &sqlx::PgPool) -> Uuid {
+    let stage_id = Uuid::new_v4();
+    sqlx::query(r#"INSERT INTO event.stages (id, name) VALUES ($1, 'Bridge Probe Stage')"#)
+        .bind(stage_id)
+        .execute(pool)
+        .await
+        .expect("stage seed");
+    let id = Uuid::new_v4();
+    sqlx::query(
+        r#"INSERT INTO event.events (id, name, stage_id, date_begin, date_end)
+           VALUES ($1, 'Bridge Probe Expo', $2, now(), now() + interval '2 days')"#,
+    )
+    .bind(id)
+    .bind(stage_id)
+    .execute(pool)
+    .await
+    .expect("event seed");
+    id
+}
+
+/// Monotonic barcode source — the events module shapes barcodes as decimal
+/// strings only (`registrations_barcode_shape`).
+static REGISTRATION_BARCODE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// Seed one registration with explicit eligibility facts. `deleted` stamps
+/// `metadata.deleted_at` (the soft-delete fence).
+async fn seed_registration(
+    pool: &sqlx::PgPool,
+    event_id: Uuid,
+    email: &str,
+    name: &str,
+    company_name: Option<&str>,
+    state: &str,
+    active: bool,
+    deleted: bool,
+) -> Uuid {
+    let id = Uuid::new_v4();
+    sqlx::query(
+        r#"INSERT INTO event.registrations
+             (id, event_id, name, email, company_name, state, active, barcode, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6::event_registration_state, $7, $8,
+                   jsonb_build_object('deleted_at', CASE WHEN $9 THEN now() END))"#,
+    )
+    .bind(id)
+    .bind(event_id)
+    .bind(name)
+    .bind(email)
+    .bind(company_name)
+    .bind(state)
+    .bind(active)
+    .bind(format!(
+        "{}",
+        REGISTRATION_BARCODE.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    ))
+    .bind(deleted)
+    .execute(pool)
+    .await
+    .expect("registration seed");
+    id
+}
+
+/// The DSL's own spelling of a field (the grammar's snake_case names, the
+/// same strings `parse_domain` accepts and `DomainInvalid::UnknownField`
+/// reports) — used so refusals name fields exactly as operators wrote them.
+fn domain_field_name(f: &DomainField) -> &'static str {
+    match f {
+        DomainField::Email => "email",
+        DomainField::Name => "name",
+        DomainField::FirstName => "first_name",
+        DomainField::LastName => "last_name",
+        DomainField::CompanyName => "company_name",
+        DomainField::CountryCode => "country_code",
+        DomainField::MailingAudienceId => "mailing_audience_id",
+    }
+}
+
+/// The typed-port probe double over the REAL registration read model —
+/// the miniature of the host adapter: the events module's declared
+/// mail-eligibility law (`state IN ('open','done') AND active`, plus not
+/// soft-deleted and carrying an email) as the population predicate, and
+/// the whitelisted DSL bound onto the registration columns (email, attendee
+/// name, company name); every other whitelisted field REFUSES loudly —
+/// never a silently dropped filter.
+struct SeededRegistrationTarget {
+    pool: sqlx::PgPool,
+}
+
+#[async_trait::async_trait]
+impl backbone_mailing::application::service::EventRegistrationTargetResolver
+    for SeededRegistrationTarget
+{
+    async fn resolve(
+        &self,
+        domain: &CompiledDomain,
+    ) -> Result<Vec<ResolvedRecipient>, backbone_mailing::application::service::EventRegistrationTargetError>
+    {
+        use backbone_mailing::application::service::EventRegistrationTargetError as E;
+        use sqlx::Arguments;
+
+        let mut sql = String::from(
+            "SELECT r.id AS recipient_id, r.email \
+             FROM event.registrations r \
+             WHERE r.state IN ('open', 'done') \
+             AND r.active \
+             AND (r.metadata->>'deleted_at') IS NULL \
+             AND coalesce(r.email, '') <> ''",
+        );
+        let mut args = sqlx::postgres::PgArguments::default();
+        let mut n = 0usize;
+        for term in &domain.terms {
+            let col = match term.field {
+                DomainField::Email => "r.email",
+                DomainField::Name => "r.name",
+                DomainField::CompanyName => "r.company_name",
+                other => {
+                    return Err(E::Backend(format!(
+                        "the event_registration target has no {} column to bind a domain \
+                         term to — remove the term or target a model that carries it",
+                        domain_field_name(&other)
+                    )));
+                }
+            };
+            n += 1;
+            match term.op {
+                DomainOp::Eq | DomainOp::In => {
+                    sql.push_str(&format!(
+                        " AND lower(coalesce({col}, '')) = ANY(${n})"
+                    ));
+                    let lowered: Vec<String> =
+                        term.values.iter().map(|v| v.to_lowercase()).collect();
+                    args.add(lowered).map_err(|e| E::Backend(e.to_string()))?;
+                }
+                DomainOp::Ne | DomainOp::NotIn => {
+                    sql.push_str(&format!(
+                        " AND lower(coalesce({col}, '')) <> ALL(${n})"
+                    ));
+                    let lowered: Vec<String> =
+                        term.values.iter().map(|v| v.to_lowercase()).collect();
+                    args.add(lowered).map_err(|e| E::Backend(e.to_string()))?;
+                }
+                DomainOp::Like => {
+                    sql.push_str(&format!(
+                        " AND coalesce({col}, '') ILIKE '%' || ${n} || '%'"
+                    ));
+                    let pat = term.values.first().cloned().unwrap_or_default();
+                    args.add(pat).map_err(|e| E::Backend(e.to_string()))?;
+                }
+                DomainOp::NotLike => {
+                    sql.push_str(&format!(
+                        " AND coalesce({col}, '') NOT ILIKE '%' || ${n} || '%'"
+                    ));
+                    let pat = term.values.first().cloned().unwrap_or_default();
+                    args.add(pat).map_err(|e| E::Backend(e.to_string()))?;
+                }
+            }
+        }
+        sql.push_str(" ORDER BY 2 LIMIT 100001");
+        let rows: Vec<ResolvedRecipient> =
+            sqlx::query_as_with::<sqlx::Postgres, ResolvedRecipient, _>(&sql, args)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|e| E::Backend(format!("event_registration resolve: {e}")))?;
+        Ok(rows)
+    }
+}
+
+#[tokio::test]
+async fn event_registration_target_resolves_typed_against_seeded_registrations() {
+    let Some(db) = TestDb::new("bridge-event-resolve").await else {
+        return skipped("bridge-event-resolve");
+    };
+    if !apply_events_migrations(&db.pool, "bridge-event-resolve").await {
+        db.dispose().await;
+        return;
+    }
+    let event_id = seed_event(&db.pool).await;
+    // The eligibility fence: only the first two rows are mail-eligible.
+    seed_registration(&db.pool, event_id, "open@example.id", "Open Attendee", Some("Acme"), "open", true, false).await;
+    seed_registration(&db.pool, event_id, "done@example.id", "Done Attendee", Some("Beta"), "done", true, false).await;
+    seed_registration(&db.pool, event_id, "cancel@example.id", "Cancelled", None, "cancel", true, false).await;
+    seed_registration(&db.pool, event_id, "archive@example.id", "Archived", None, "open", false, false).await;
+    seed_registration(&db.pool, event_id, "deleted@example.id", "Deleted", None, "open", true, true).await;
+    seed_registration(&db.pool, event_id, "", "No Email", None, "open", true, false).await;
+
+    let engine = MailingWriteService::new(db.pool.clone()).with_event_registration_resolver(
+        Arc::new(SeededRegistrationTarget { pool: db.pool.clone() }),
+    );
+    let id = engine
+        .create_mailing(&bridge_cmd("event_registration", "Event bridge resolve"))
+        .await
+        .expect("create");
+    // No default domain is injected (upstream's state filter is the
+    // resolver's structural population predicate — recorded deviation).
+    assert_eq!(
+        stored_domain(&db.pool, id).await,
+        serde_json::json!([]),
+        "the events bridge ships no default domain"
+    );
+    engine.launch(id, "immediate", None).await.expect("launch");
+    let out = engine.send_queue_sweep().await.expect("sweep");
+    assert_eq!(out.claimed, 1);
+    assert_eq!(out.recipients_resolved, 2, "only the eligible registrations");
+    assert_eq!(out.minted, 2);
+    assert_eq!(out.enqueued, 2);
+    assert_eq!(out.completed, 1);
+    assert_eq!(out.parked, 0);
+    let emails: Vec<String> = sqlx::query_scalar(
+        "SELECT recipient_email FROM mailing.mailing_traces WHERE mailing_id = $1 ORDER BY 1",
+    )
+    .bind(id)
+    .fetch_all(&db.pool)
+    .await
+    .expect("traces");
+    assert_eq!(emails, vec!["done@example.id", "open@example.id"]);
+
+    // A typed domain term narrows within the eligible population.
+    let resolver = SeededRegistrationTarget { pool: db.pool.clone() };
+    let narrowed = resolver
+        .resolve(&parse_json(
+            r#"[{"field": "company_name", "op": "like", "value": "acme"}]"#,
+        ))
+        .await
+        .expect("narrowed resolve");
+    assert_eq!(narrowed.len(), 1);
+    assert_eq!(narrowed[0].email, "open@example.id");
+    db.dispose().await;
+}
+
+/// Parse helper for probe-local domains (the module's own typed parser).
+fn parse_json(raw: &str) -> CompiledDomain {
+    backbone_mailing::application::service::mailing_write_service::parse_domain(
+        &serde_json::from_str::<serde_json::Value>(raw).expect("probe domain json"),
+    )
+    .expect("probe domain parses")
+}
+
+#[tokio::test]
+async fn event_registration_without_a_composed_resolver_parks_loudly() {
+    let Some(db) = TestDb::new("bridge-event-park").await else {
+        return skipped("bridge-event-park");
+    };
+    // NO resolver composed — the registry's fail-closed default.
+    let svc = MailingWriteService::new(db.pool.clone());
+    let id = svc
+        .create_mailing(&bridge_cmd("event_registration", "No resolver"))
+        .await
+        .expect("create");
+    svc.launch(id, "immediate", None).await.expect("launch");
+    let out = svc.send_queue_sweep().await.expect("sweep");
+    assert_eq!(out.claimed, 1);
+    assert_eq!(out.parked, 1, "the events target parks, never sends");
+    assert_eq!(out.recipients_resolved, 0);
+    assert_eq!(out.completed, 0);
+    let (state, err): (String, Option<String>) = sqlx::query_as(
+        r#"SELECT state::text, metadata->>'send_error' FROM mailing.mailings WHERE id = $1"#,
+    )
+    .bind(id)
+    .fetch_one(&db.pool)
+    .await
+    .expect("mailing row");
+    assert_eq!(state, "sending", "a parked mailing stays retryable");
+    let err = err.expect("send_error present");
+    assert!(
+        err.contains("no event_registration resolver is composed"),
+        "the park reason names the missing target seam: {err}"
+    );
+    let traces: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM mailing.mailing_traces WHERE mailing_id = $1")
+            .bind(id)
+            .fetch_one(&db.pool)
+            .await
+            .expect("trace count");
+    assert_eq!(traces, 0, "never a silent zero-recipient sweep");
+
+    // The typed refusing default refuses with the TYPED error naming the
+    // install verb (the direct-port deny shape).
+    let refusing =
+        backbone_mailing::application::service::RefusingEventRegistrationTarget;
+    let err = refusing.resolve(&CompiledDomain::default()).await.expect_err("refuses");
+    assert!(
+        matches!(
+            err,
+            backbone_mailing::application::service::EventRegistrationTargetError::NotComposed { .. }
+        ),
+        "the refusal is the typed NotComposed variant: {err:?}"
+    );
+    assert!(
+        err.to_string().contains("with_event_registration_resolver"),
+        "the typed refusal names the install verb: {err}"
+    );
+    db.dispose().await;
+}
+
+#[tokio::test]
+async fn event_registration_refuses_overset_domains_not_coerces() {
+    let Some(db) = TestDb::new("bridge-event-overset").await else {
+        return skipped("bridge-event-overset");
+    };
+    let svc = MailingWriteService::new(db.pool.clone());
+
+    // An INVALID domain (a field outside the whitelist — upstream's state
+    // filter) is refused at create with the typed 422, never coerced.
+    let mut overset = bridge_cmd("event_registration", "Overset");
+    overset.mailing_domain_raw = serde_json::json!([["state", "=", "open"]]);
+    let err = svc.create_mailing(&overset).await.expect_err("must refuse");
+    match &err {
+        MailingWriteError::Domain(DomainInvalid::UnknownField(field)) => {
+            assert_eq!(field, "state");
+        }
+        other => panic!("expected Domain(UnknownField), got {other:?}"),
+    }
+    assert_eq!(err.http_status(), 422);
+
+    // A WHITELISTED but unbindable field parses at create, then the
+    // resolver REFUSES it loudly (a filter the target cannot honor is
+    // never silently dropped).
+    let resolver = SeededRegistrationTarget { pool: db.pool.clone() };
+    let err = resolver
+        .resolve(&parse_json(r#"[{"field": "country_code", "op": "=", "value": "ID"}]"#))
+        .await
+        .expect_err("unbindable field refuses");
+    assert!(
+        err.to_string().contains("country_code"),
+        "the refusal names the unbindable field: {err}"
+    );
+
+    // On the sweep the same refusal surfaces as the loud typed Conflict —
+    // the mailing sends NOTHING rather than mailing a mis-filtered
+    // audience, and stays retryable for the fix.
+    let engine = MailingWriteService::new(db.pool.clone())
+        .with_event_registration_resolver(Arc::new(SeededRegistrationTarget { pool: db.pool.clone() }));
+    let mut whitelisted = bridge_cmd("event_registration", "Unbindable at sweep");
+    whitelisted.mailing_domain_raw =
+        serde_json::json!([{"field": "first_name", "op": "=", "value": "Nope"}]);
+    let id = engine.create_mailing(&whitelisted).await.expect("create");
+    engine.launch(id, "immediate", None).await.expect("launch");
+    let err = engine.send_queue_sweep().await.expect_err("sweep refuses");
+    assert!(
+        err.to_string().contains("event_registration resolver failed"),
+        "the sweep error names the refusing target: {err}"
+    );
+    assert!(
+        err.to_string().contains("first_name"),
+        "the refusal names the unbindable field: {err}"
+    );
+    let traces: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM mailing.mailing_traces WHERE mailing_id = $1")
+            .bind(id)
+            .fetch_one(&db.pool)
+            .await
+            .expect("trace count");
+    assert_eq!(traces, 0, "refused, not coerced — zero sends");
     db.dispose().await;
 }

@@ -213,6 +213,15 @@ pub fn default_domain_for(target_model: &str) -> Option<serde_json::Value> {
         // own domain applies); the deal arm follows the lead posture (no
         // upstream twin exists).
         "crm_lead" | "crm_deal" => None,
+        // The events bridge follows the same posture: upstream's
+        // `[('state', '!=', 'cancel')]` filters a REGISTRATION column
+        // the whitelisted DSL cannot express — the honest typed
+        // equivalent is the resolver's own population predicate (the
+        // events module's declared mail-eligibility law:
+        // state IN open,done AND active, plus not soft-deleted; recorded
+        // deviation), so the mailing's own domain applies and NO default
+        // is injected.
+        "event_registration" => None,
         // The sale bridge's exclusion policy, typed: mail only customers
         // that carry a mail address. Upstream's `[('state', '!=', 'cancel')]`
         // filters SALE-ORDER state, a column the whitelisted DSL cannot
@@ -254,7 +263,8 @@ pub trait PartyRecipientResolver: Send + Sync {
 /// One EXTERNAL target's resolver — the per-target generalization of the
 /// party seam (the cycle-44 bridge contract, MVX-1: declarative
 /// composition, no registry scan). The host composes ONE resolver per
-/// bridge target (`crm_lead`, `crm_deal`, `selling_customer`, or `party`),
+/// bridge target (`crm_lead`, `crm_deal`, `selling_customer`,
+/// `event_registration`, or `party`),
 /// keyed by the `target_model` string it serves; a target arriving at the
 /// send walk with NO composed resolver PARKS loudly — never a silent
 /// zero-recipient sweep.
@@ -262,7 +272,7 @@ pub trait PartyRecipientResolver: Send + Sync {
 pub trait TargetRecipientResolver: Send + Sync {
     /// The `target_model` value this resolver serves — exactly one of the
     /// closed enum's external variants (`party`, `crm_lead`, `crm_deal`,
-    /// `selling_customer`).
+    /// `selling_customer`, `event_registration`).
     fn target_model(&self) -> &'static str;
 
     /// Resolve the compiled domain into recipients. The domain is the SAME
@@ -472,6 +482,26 @@ impl MailingWriteService {
         self
     }
 
+    /// Compose the events-registrations bridge target's TYPED resolver
+    /// port (the `with_party_resolver` shape): wraps the typed
+    /// [`crate::application::service::event_registration_target_port::EventRegistrationTargetResolver`]
+    /// into the per-target registry through
+    /// [`EventRegistrationTargetAdapter`] — mechanically the SAME
+    /// `with_target_resolver` install, with the typed error surface. A
+    /// mailing targeting `event_registration` that reaches the send walk
+    /// before this verb runs parks loudly (never a silent zero-recipient
+    /// sweep).
+    pub fn with_event_registration_resolver(
+        self,
+        r: Arc<
+            dyn crate::application::service::event_registration_target_port::EventRegistrationTargetResolver,
+        >,
+    ) -> Self {
+        self.with_target_resolver(Arc::new(
+            crate::application::service::event_registration_target_port::EventRegistrationTargetAdapter::new(r),
+        ))
+    }
+
     /// Compose ONE phone-bearing target's SMS targeting resolver — the
     /// phone-channel twin of [`Self::with_target_resolver`]. Registrations
     /// are keyed by `target_model` exactly like the email arm; a target
@@ -545,7 +575,8 @@ impl MailingWriteService {
             Err(_) => {
                 return Err(MailingWriteError::Invalid(format!(
                     "target_model must be one of the closed enum's values \
-                     (mailing_contact, party, crm_lead, crm_deal, selling_customer), not {}",
+                     (mailing_contact, party, crm_lead, crm_deal, selling_customer, \
+                     event_registration), not {}",
                     cmd.target_model
                 )))
             }
@@ -942,9 +973,10 @@ impl MailingWriteService {
                 tx.commit().await?;
                 r
             }
-            // Every EXTERNAL target (party + the cycle-44 bridge targets)
-            // resolves through its composed per-target resolver port.
-            "party" | "crm_lead" | "crm_deal" | "selling_customer" => {
+            // Every EXTERNAL target (party + the cycle-44 bridge targets +
+            // the events-registrations bridge target) resolves through its
+            // composed per-target resolver port.
+            "party" | "crm_lead" | "crm_deal" | "selling_customer" | "event_registration" => {
                 match self.target_resolvers.get(m.target_model.as_str()) {
                     Some(resolver) => resolver.resolve(&domain).await.map_err(|e| {
                         // A resolver failure parks loudly — not a silent empty sweep.

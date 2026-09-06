@@ -14,6 +14,7 @@ pub enum MailingTargetModel {
     CrmLead,
     CrmDeal,
     SellingCustomer,
+    EventRegistration,
 }
 
 impl std::fmt::Display for MailingTargetModel {
@@ -24,6 +25,7 @@ impl std::fmt::Display for MailingTargetModel {
             Self::CrmLead => write!(f, "crm_lead"),
             Self::CrmDeal => write!(f, "crm_deal"),
             Self::SellingCustomer => write!(f, "selling_customer"),
+            Self::EventRegistration => write!(f, "event_registration"),
         }
     }
 }
@@ -38,6 +40,7 @@ impl FromStr for MailingTargetModel {
             "crm_lead" => Ok(Self::CrmLead),
             "crm_deal" => Ok(Self::CrmDeal),
             "selling_customer" => Ok(Self::SellingCustomer),
+            "event_registration" => Ok(Self::EventRegistration),
             _ => Err(format!("Unknown MailingTargetModel variant: {}", s)),
         }
     }

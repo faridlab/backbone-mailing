@@ -60,6 +60,20 @@ user_owned:
   # shape), zero billing Cargo edge.
   - "src/application/service/sale_invoiced_amount_port.rs"
 
+  # The events-registrations bridge target (mass_mailing_event): the typed
+  # resolver PORT this module owns and the host implements over the events
+  # module's registration read surface — fail-closed (registry parks loudly
+  # at the send walk; the Refusing double refuses with the typed error),
+  # zero events Cargo edge. The *_sms twin rides the same target value on
+  # the existing sms channel (no twin module).
+  - "src/application/service/event_registration_target_port.rs"
+
+  # The events bridge target's hand-written migration (one enum value; no
+  # statement in it USES the newly added value — the bridge_targets
+  # mechanics; the value cannot be dropped in place, so the down file
+  # stamps SELECT 1).
+  - "migrations/*event_registration_target*"
+
   # The cycle-44 bridge targets' hand-written migration (enum values +
   # the A/B control's parallel sms winner axis; value-only ALTER TYPEs and
   # a nullable column — no statement USES a newly added value, the

@@ -18,6 +18,7 @@ pub mod mailing_filter_service;
 
 // <<< CUSTOM
 pub mod ab_test_write_service;
+pub mod event_registration_target_port;
 pub mod mailing_stats_read_service;
 pub mod mailing_write_service;
 pub mod sale_invoiced_amount_port;
@@ -55,6 +56,10 @@ pub use mailing_write_service::{
 pub use sale_invoiced_amount_port::{
     CannedSaleInvoicedAmount, RefusingSaleInvoicedAmount, SaleInvoicedAmountError,
     SaleInvoicedAmountPort, SaleInvoicedAmountSlot, SourceInvoicedAmount,
+};
+pub use event_registration_target_port::{
+    EventRegistrationTargetAdapter, EventRegistrationTargetError,
+    EventRegistrationTargetResolver, RefusingEventRegistrationTarget,
 };
 pub use subscription_write_service::{SubscriptionWriteError, SubscriptionWriteService};
 pub use sms_delivery_pump_service::{SmsDeliveryPumpService, SmsPumpOutcome};

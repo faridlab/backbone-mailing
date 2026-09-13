@@ -14,13 +14,13 @@ version: 2
 schema: mailing
 description: "mailing — the mass-mail engine: audiences (lists, contacts, the opt-out-carrying subscription through-rows), the hand-set mailing lifecycle (draft/in_queue/sending/done) drained by ONE daily send cron under a SKIP LOCKED claim, seeded deterministic A/B testing, and the per-recipient trace ledger (Odoo mass_mailing port)"
 
-# ADR-0014 company fence: the Odoo mass_mailing stack ships NO company column
-# and zero ir.rules (posture 4 — the ADR names the mass_mailing family
-# explicitly). Declaring `none` emits no company RLS migration; synthesizing
-# a fence would change behavior, not just enforcement (do-not-synthesize).
-# Tenant isolation (ADR-0006) remains the only fence; security is ACLs +
-# service-layer checks (guarded route compositions).
-company_fence: none
+# Company fence: none by design (ADR-0014 posture 4 — the ADR names the
+# mass_mailing family explicitly; the Odoo mass_mailing stack ships no company
+# column and zero ir.rules). The module is tenant-agnostic (ADR-0029): no
+# company RLS is emitted and none may be synthesized — a fence would change
+# behavior, not just enforcement (do-not-synthesize). Tenant isolation
+# (ADR-0006) remains the only fence; security is ACLs + service-layer checks
+# (guarded route compositions).
 
 config:
   database: postgresql

@@ -7,7 +7,7 @@ info:
     This API provides 11 standard CRUD endpoints for each model.
 
 servers:
-  - url: http://localhost:3000
+  - url: /
     description: Development server
 
 tags:
@@ -29,7 +29,7 @@ tags:
     description: MailingFilter management endpoints
 
 paths:
-  /api/v1/mailing_ab_tests:
+  /api/v1/mailing/mailing_ab_tests:
     get:
       tags:
         - MailingAbTests
@@ -75,7 +75,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/mailing_ab_tests/{id}:
+  /api/v1/mailing/mailing_ab_tests/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -147,7 +147,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_ab_tests/bulk:
+  /api/v1/mailing/mailing_ab_tests/bulk:
     post:
       tags:
         - MailingAbTests
@@ -239,7 +239,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_ab_tests/upsert:
+  /api/v1/mailing/mailing_ab_tests/upsert:
     post:
       tags:
         - MailingAbTests
@@ -269,7 +269,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingAbTest'
 
-  /api/v1/mailing_ab_tests/trash:
+  /api/v1/mailing/mailing_ab_tests/trash:
     get:
       tags:
         - MailingAbTests
@@ -286,7 +286,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingAbTestList'
 
-  /api/v1/mailing_ab_tests/{id}/restore:
+  /api/v1/mailing/mailing_ab_tests/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -304,7 +304,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_ab_tests/empty:
+  /api/v1/mailing/mailing_ab_tests/empty:
     delete:
       tags:
         - MailingAbTests
@@ -321,7 +321,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/mailing_ab_tests/delete/bulk:
+  /api/v1/mailing/mailing_ab_tests/delete/bulk:
     post:
       tags:
         - MailingAbTests
@@ -341,7 +341,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_ab_tests/restore/bulk:
+  /api/v1/mailing/mailing_ab_tests/restore/bulk:
     post:
       tags:
         - MailingAbTests
@@ -359,7 +359,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_ab_tests/restore/all:
+  /api/v1/mailing/mailing_ab_tests/restore/all:
     post:
       tags:
         - MailingAbTests
@@ -375,7 +375,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/mailing_ab_tests/trash/bulk:
+  /api/v1/mailing/mailing_ab_tests/trash/bulk:
     delete:
       tags:
         - MailingAbTests
@@ -395,7 +395,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_audiences:
+  /api/v1/mailing/mailing_audiences:
     get:
       tags:
         - MailingAudiences
@@ -441,7 +441,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/mailing_audiences/{id}:
+  /api/v1/mailing/mailing_audiences/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -513,7 +513,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_audiences/bulk:
+  /api/v1/mailing/mailing_audiences/bulk:
     post:
       tags:
         - MailingAudiences
@@ -605,7 +605,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_audiences/upsert:
+  /api/v1/mailing/mailing_audiences/upsert:
     post:
       tags:
         - MailingAudiences
@@ -635,7 +635,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingAudience'
 
-  /api/v1/mailing_audiences/trash:
+  /api/v1/mailing/mailing_audiences/trash:
     get:
       tags:
         - MailingAudiences
@@ -652,7 +652,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingAudienceList'
 
-  /api/v1/mailing_audiences/{id}/restore:
+  /api/v1/mailing/mailing_audiences/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -670,7 +670,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_audiences/empty:
+  /api/v1/mailing/mailing_audiences/empty:
     delete:
       tags:
         - MailingAudiences
@@ -687,7 +687,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/mailing_audiences/delete/bulk:
+  /api/v1/mailing/mailing_audiences/delete/bulk:
     post:
       tags:
         - MailingAudiences
@@ -707,7 +707,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_audiences/restore/bulk:
+  /api/v1/mailing/mailing_audiences/restore/bulk:
     post:
       tags:
         - MailingAudiences
@@ -725,7 +725,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_audiences/restore/all:
+  /api/v1/mailing/mailing_audiences/restore/all:
     post:
       tags:
         - MailingAudiences
@@ -741,7 +741,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/mailing_audiences/trash/bulk:
+  /api/v1/mailing/mailing_audiences/trash/bulk:
     delete:
       tags:
         - MailingAudiences
@@ -761,7 +761,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_contacts:
+  /api/v1/mailing/mailing_contacts:
     get:
       tags:
         - MailingContacts
@@ -807,7 +807,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/mailing_contacts/{id}:
+  /api/v1/mailing/mailing_contacts/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -879,7 +879,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_contacts/bulk:
+  /api/v1/mailing/mailing_contacts/bulk:
     post:
       tags:
         - MailingContacts
@@ -971,7 +971,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_contacts/upsert:
+  /api/v1/mailing/mailing_contacts/upsert:
     post:
       tags:
         - MailingContacts
@@ -1001,7 +1001,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingContact'
 
-  /api/v1/mailing_contacts/trash:
+  /api/v1/mailing/mailing_contacts/trash:
     get:
       tags:
         - MailingContacts
@@ -1018,7 +1018,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingContactList'
 
-  /api/v1/mailing_contacts/{id}/restore:
+  /api/v1/mailing/mailing_contacts/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -1036,7 +1036,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_contacts/empty:
+  /api/v1/mailing/mailing_contacts/empty:
     delete:
       tags:
         - MailingContacts
@@ -1053,7 +1053,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/mailing_contacts/delete/bulk:
+  /api/v1/mailing/mailing_contacts/delete/bulk:
     post:
       tags:
         - MailingContacts
@@ -1073,7 +1073,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_contacts/restore/bulk:
+  /api/v1/mailing/mailing_contacts/restore/bulk:
     post:
       tags:
         - MailingContacts
@@ -1091,7 +1091,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_contacts/restore/all:
+  /api/v1/mailing/mailing_contacts/restore/all:
     post:
       tags:
         - MailingContacts
@@ -1107,7 +1107,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/mailing_contacts/trash/bulk:
+  /api/v1/mailing/mailing_contacts/trash/bulk:
     delete:
       tags:
         - MailingContacts
@@ -1127,7 +1127,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_subscriptions:
+  /api/v1/mailing/mailing_subscriptions:
     get:
       tags:
         - MailingSubscriptions
@@ -1173,7 +1173,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/mailing_subscriptions/{id}:
+  /api/v1/mailing/mailing_subscriptions/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -1245,7 +1245,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_subscriptions/bulk:
+  /api/v1/mailing/mailing_subscriptions/bulk:
     post:
       tags:
         - MailingSubscriptions
@@ -1337,7 +1337,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_subscriptions/upsert:
+  /api/v1/mailing/mailing_subscriptions/upsert:
     post:
       tags:
         - MailingSubscriptions
@@ -1367,7 +1367,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingSubscription'
 
-  /api/v1/mailing_subscriptions/trash:
+  /api/v1/mailing/mailing_subscriptions/trash:
     get:
       tags:
         - MailingSubscriptions
@@ -1384,7 +1384,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingSubscriptionList'
 
-  /api/v1/mailing_subscriptions/{id}/restore:
+  /api/v1/mailing/mailing_subscriptions/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -1402,7 +1402,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_subscriptions/empty:
+  /api/v1/mailing/mailing_subscriptions/empty:
     delete:
       tags:
         - MailingSubscriptions
@@ -1419,7 +1419,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/mailing_subscriptions/delete/bulk:
+  /api/v1/mailing/mailing_subscriptions/delete/bulk:
     post:
       tags:
         - MailingSubscriptions
@@ -1439,7 +1439,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_subscriptions/restore/bulk:
+  /api/v1/mailing/mailing_subscriptions/restore/bulk:
     post:
       tags:
         - MailingSubscriptions
@@ -1457,7 +1457,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_subscriptions/restore/all:
+  /api/v1/mailing/mailing_subscriptions/restore/all:
     post:
       tags:
         - MailingSubscriptions
@@ -1473,7 +1473,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/mailing_subscriptions/trash/bulk:
+  /api/v1/mailing/mailing_subscriptions/trash/bulk:
     delete:
       tags:
         - MailingSubscriptions
@@ -1493,7 +1493,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/opt_out_reasons:
+  /api/v1/mailing/opt_out_reasons:
     get:
       tags:
         - OptOutReasons
@@ -1539,7 +1539,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/opt_out_reasons/{id}:
+  /api/v1/mailing/opt_out_reasons/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -1611,7 +1611,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/opt_out_reasons/bulk:
+  /api/v1/mailing/opt_out_reasons/bulk:
     post:
       tags:
         - OptOutReasons
@@ -1703,7 +1703,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/opt_out_reasons/upsert:
+  /api/v1/mailing/opt_out_reasons/upsert:
     post:
       tags:
         - OptOutReasons
@@ -1733,7 +1733,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/OptOutReason'
 
-  /api/v1/opt_out_reasons/trash:
+  /api/v1/mailing/opt_out_reasons/trash:
     get:
       tags:
         - OptOutReasons
@@ -1750,7 +1750,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/OptOutReasonList'
 
-  /api/v1/opt_out_reasons/{id}/restore:
+  /api/v1/mailing/opt_out_reasons/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -1768,7 +1768,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/opt_out_reasons/empty:
+  /api/v1/mailing/opt_out_reasons/empty:
     delete:
       tags:
         - OptOutReasons
@@ -1785,7 +1785,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/opt_out_reasons/delete/bulk:
+  /api/v1/mailing/opt_out_reasons/delete/bulk:
     post:
       tags:
         - OptOutReasons
@@ -1805,7 +1805,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/opt_out_reasons/restore/bulk:
+  /api/v1/mailing/opt_out_reasons/restore/bulk:
     post:
       tags:
         - OptOutReasons
@@ -1823,7 +1823,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/opt_out_reasons/restore/all:
+  /api/v1/mailing/opt_out_reasons/restore/all:
     post:
       tags:
         - OptOutReasons
@@ -1839,7 +1839,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/opt_out_reasons/trash/bulk:
+  /api/v1/mailing/opt_out_reasons/trash/bulk:
     delete:
       tags:
         - OptOutReasons
@@ -1859,7 +1859,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailings:
+  /api/v1/mailing/mailings:
     get:
       tags:
         - Mailings
@@ -1905,7 +1905,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/mailings/{id}:
+  /api/v1/mailing/mailings/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -1977,7 +1977,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailings/bulk:
+  /api/v1/mailing/mailings/bulk:
     post:
       tags:
         - Mailings
@@ -2069,7 +2069,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailings/upsert:
+  /api/v1/mailing/mailings/upsert:
     post:
       tags:
         - Mailings
@@ -2099,7 +2099,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Mailing'
 
-  /api/v1/mailings/trash:
+  /api/v1/mailing/mailings/trash:
     get:
       tags:
         - Mailings
@@ -2116,7 +2116,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingList'
 
-  /api/v1/mailings/{id}/restore:
+  /api/v1/mailing/mailings/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -2134,7 +2134,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailings/empty:
+  /api/v1/mailing/mailings/empty:
     delete:
       tags:
         - Mailings
@@ -2151,7 +2151,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/mailings/delete/bulk:
+  /api/v1/mailing/mailings/delete/bulk:
     post:
       tags:
         - Mailings
@@ -2171,7 +2171,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailings/restore/bulk:
+  /api/v1/mailing/mailings/restore/bulk:
     post:
       tags:
         - Mailings
@@ -2189,7 +2189,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailings/restore/all:
+  /api/v1/mailing/mailings/restore/all:
     post:
       tags:
         - Mailings
@@ -2205,7 +2205,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/mailings/trash/bulk:
+  /api/v1/mailing/mailings/trash/bulk:
     delete:
       tags:
         - Mailings
@@ -2225,7 +2225,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_traces:
+  /api/v1/mailing/mailing_traces:
     get:
       tags:
         - MailingTraces
@@ -2271,7 +2271,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/mailing_traces/{id}:
+  /api/v1/mailing/mailing_traces/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -2343,7 +2343,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_traces/bulk:
+  /api/v1/mailing/mailing_traces/bulk:
     post:
       tags:
         - MailingTraces
@@ -2435,7 +2435,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_traces/upsert:
+  /api/v1/mailing/mailing_traces/upsert:
     post:
       tags:
         - MailingTraces
@@ -2465,7 +2465,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingTrace'
 
-  /api/v1/mailing_traces/trash:
+  /api/v1/mailing/mailing_traces/trash:
     get:
       tags:
         - MailingTraces
@@ -2482,7 +2482,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingTraceList'
 
-  /api/v1/mailing_traces/{id}/restore:
+  /api/v1/mailing/mailing_traces/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -2500,7 +2500,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_traces/empty:
+  /api/v1/mailing/mailing_traces/empty:
     delete:
       tags:
         - MailingTraces
@@ -2517,7 +2517,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/mailing_traces/delete/bulk:
+  /api/v1/mailing/mailing_traces/delete/bulk:
     post:
       tags:
         - MailingTraces
@@ -2537,7 +2537,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_traces/restore/bulk:
+  /api/v1/mailing/mailing_traces/restore/bulk:
     post:
       tags:
         - MailingTraces
@@ -2555,7 +2555,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_traces/restore/all:
+  /api/v1/mailing/mailing_traces/restore/all:
     post:
       tags:
         - MailingTraces
@@ -2571,7 +2571,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/mailing_traces/trash/bulk:
+  /api/v1/mailing/mailing_traces/trash/bulk:
     delete:
       tags:
         - MailingTraces
@@ -2591,7 +2591,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_filters:
+  /api/v1/mailing/mailing_filters:
     get:
       tags:
         - MailingFilters
@@ -2637,7 +2637,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /api/v1/mailing_filters/{id}:
+  /api/v1/mailing/mailing_filters/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
 
@@ -2709,7 +2709,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_filters/bulk:
+  /api/v1/mailing/mailing_filters/bulk:
     post:
       tags:
         - MailingFilters
@@ -2801,7 +2801,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_filters/upsert:
+  /api/v1/mailing/mailing_filters/upsert:
     post:
       tags:
         - MailingFilters
@@ -2831,7 +2831,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingFilter'
 
-  /api/v1/mailing_filters/trash:
+  /api/v1/mailing/mailing_filters/trash:
     get:
       tags:
         - MailingFilters
@@ -2848,7 +2848,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/MailingFilterList'
 
-  /api/v1/mailing_filters/{id}/restore:
+  /api/v1/mailing/mailing_filters/{id}/restore:
     parameters:
       - $ref: '#/components/parameters/IdParam'
     post:
@@ -2866,7 +2866,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /api/v1/mailing_filters/empty:
+  /api/v1/mailing/mailing_filters/empty:
     delete:
       tags:
         - MailingFilters
@@ -2883,7 +2883,7 @@ paths:
                   deleted_count:
                     type: integer
 
-  /api/v1/mailing_filters/delete/bulk:
+  /api/v1/mailing/mailing_filters/delete/bulk:
     post:
       tags:
         - MailingFilters
@@ -2903,7 +2903,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_filters/restore/bulk:
+  /api/v1/mailing/mailing_filters/restore/bulk:
     post:
       tags:
         - MailingFilters
@@ -2921,7 +2921,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
 
-  /api/v1/mailing_filters/restore/all:
+  /api/v1/mailing/mailing_filters/restore/all:
     post:
       tags:
         - MailingFilters
@@ -2937,7 +2937,7 @@ paths:
                 properties:
                   restored: { type: integer }
 
-  /api/v1/mailing_filters/trash/bulk:
+  /api/v1/mailing/mailing_filters/trash/bulk:
     delete:
       tags:
         - MailingFilters

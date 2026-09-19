@@ -81,24 +81,21 @@ rules:
     assert: "the declarative domain DSL parses through the typed parser — Result<CompiledDomain, DomainInvalid>. Malformed input is a typed 422 at create/update; AT SEND the mailing is parked (state stays sending, error recorded on the row, zero recipients touched, zero mail rows minted) — NEVER a silent zero-recipient send (MMB-6 closed)"
     error_code: domain_invalid
     enforcement: service
-    # service-only justification: the parser is code over a typed json column;
-    # no row-level CHECK can express "this json parses".
+    justification: 'The parser is code over a typed json column; no row-level CHECK can express whether that json parses.'
   - id: R-M7
     name: list_archive_guard
     when: update list
     assert: "archiving (active=false) is refused while any mailing with state != done targets the audience (G-MM7 kept — cross-table, so the verb enforces)"
     error_code: list_in_use
     enforcement: service
-    # service-only justification: cross-table guard (mailings referencing the
-    # list) — not expressible as a row-level CHECK.
+    justification: "Cross-table guard (mailings referencing the list) — not expressible as a row-level CHECK."
   - id: R-M8
     name: campaign_cleared_while_ab_testing_refused
     when: update mailing
     assert: "clearing campaign_id while ab_testing_enabled is refused (G-MM9 kept — an A/B mailing without its campaign would orphan the campaign-keyed dedup and the test row)"
     error_code: campaign_required_for_ab_testing
     enforcement: service
-    # service-only justification: conditional cross-field + cross-row guard
-    # (the ab test row and the seen-list both key off the campaign).
+    justification: "Conditional cross-field + cross-row guard (the ab test row and the seen-list both key off the campaign)."
 
 triggers: []
 # (none — upstream's create/write side-effect ladder (cron arming via ORM

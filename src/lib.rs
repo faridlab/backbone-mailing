@@ -44,6 +44,9 @@ pub use application::service::MailingService;
 pub use application::service::MailingTraceService;
 pub use application::service::MailingFilterService;
 
+// Re-exports - Validation
+pub use application::validator::{ValidationError, ValidationResult};
+
 use std::sync::Arc;
 use axum::Router;
 use sqlx::PgPool;
@@ -94,8 +97,8 @@ impl MailingModule {
             create_mailing_contact_routes,
             create_mailing_subscription_routes,
             create_opt_out_reason_routes,
-            create_mailing_routes,
-            create_mailing_trace_routes,
+            create_mailing_read_routes,
+            create_mailing_trace_read_routes,
             create_mailing_filter_routes,
         };
 
@@ -105,8 +108,14 @@ impl MailingModule {
             .merge(create_mailing_contact_routes(self.mailing_contact_service.clone()))
             .merge(create_mailing_subscription_routes(self.mailing_subscription_service.clone()))
             .merge(create_opt_out_reason_routes(self.opt_out_reason_service.clone()))
-            .merge(create_mailing_routes(self.mailing_service.clone()))
-            .merge(create_mailing_trace_routes(self.mailing_trace_service.clone()))
+            // Mailing: hand_set lifecycle — the state field moves only through the
+            // module's validated verbs; generic writes cannot reach it, so only the
+            // read surface mounts here.
+            .merge(create_mailing_read_routes(self.mailing_service.clone()))
+            // MailingTrace: hand_set lifecycle — the state field moves only through the
+            // module's validated verbs; generic writes cannot reach it, so only the
+            // read surface mounts here.
+            .merge(create_mailing_trace_read_routes(self.mailing_trace_service.clone()))
             .merge(create_mailing_filter_routes(self.mailing_filter_service.clone()))
     }
 

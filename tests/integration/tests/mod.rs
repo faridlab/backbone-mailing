@@ -16,7 +16,6 @@ pub mod mailing_trace_api_test;
 pub mod mailing_filter_api_test;
 
 // Re-exports for convenience
-pub use crud_test_base::*;
 pub use mailing_ab_test_api_test::*;
 pub use mailing_audience_api_test::*;
 pub use mailing_contact_api_test::*;

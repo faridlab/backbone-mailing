@@ -243,6 +243,7 @@ impl backbone_orm::EntityRepoMeta for MailingAbTest {
         m.insert("winner_mailing_id".to_string(), "uuid".to_string());
         m.insert("winner_selection".to_string(), "ab_winner_selection".to_string());
         m.insert("winner_selection_sms".to_string(), "ab_winner_selection".to_string());
+        m.insert("promote_at".to_string(), "timestamptz".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {

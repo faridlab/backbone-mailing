@@ -389,6 +389,8 @@ impl backbone_orm::EntityRepoMeta for Mailing {
         m.insert("schedule_type".to_string(), "mailing_schedule_type".to_string());
         m.insert("mailing_type".to_string(), "mailing_type".to_string());
         m.insert("target_model".to_string(), "mailing_target_model".to_string());
+        m.insert("schedule_date".to_string(), "timestamptz".to_string());
+        m.insert("sent_date".to_string(), "timestamptz".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {

@@ -224,6 +224,7 @@ impl backbone_orm::EntityRepoMeta for MailingSubscription {
         m.insert("contact_id".to_string(), "uuid".to_string());
         m.insert("mailing_audience_id".to_string(), "uuid".to_string());
         m.insert("opt_out_reason_id".to_string(), "uuid".to_string());
+        m.insert("opt_out_datetime".to_string(), "timestamptz".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {

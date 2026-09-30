@@ -5,7 +5,6 @@
 //! Provides reusable base for testing all 12 Backbone CRUD endpoints.
 
 use serde_json::{json, Value};
-use std::time::Instant;
 use uuid::Uuid;
 
 use crate::integration::framework::{ApiTest, TestResult};
@@ -21,7 +20,6 @@ pub struct CrudTestConfig {
     pub base_path: String,
     pub entity_name: String,
     pub supports_soft_delete: bool,
-    pub supports_bulk: bool,
 }
 
 impl CrudTestConfig {
@@ -30,7 +28,6 @@ impl CrudTestConfig {
             base_path: base_path.to_string(),
             entity_name: entity_name.to_string(),
             supports_soft_delete: true,
-            supports_bulk: true,
         }
     }
 }
@@ -136,7 +133,6 @@ impl<G: TestDataGenerator> GenericCrudTest<G> {
     /// Test: List entities (GET /collection)
     pub async fn test_list(&self) -> TestResult {
         let test_name = format!("{} - List", self.config.entity_name);
-        let start = Instant::now();
 
         match self.api_test.get(&self.endpoint(""), None).await {
             Ok(response) => self.api_test.create_result(

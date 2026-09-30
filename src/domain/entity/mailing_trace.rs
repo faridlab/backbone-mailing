@@ -367,6 +367,10 @@ impl backbone_orm::EntityRepoMeta for MailingTrace {
         m.insert("trace_type".to_string(), "trace_type".to_string());
         m.insert("trace_status".to_string(), "trace_status".to_string());
         m.insert("failure_type".to_string(), "trace_failure_type".to_string());
+        m.insert("sent_datetime".to_string(), "timestamptz".to_string());
+        m.insert("open_datetime".to_string(), "timestamptz".to_string());
+        m.insert("reply_datetime".to_string(), "timestamptz".to_string());
+        m.insert("links_click_datetime".to_string(), "timestamptz".to_string());
         m
     }
     fn search_fields() -> &'static [&'static str] {

@@ -14,8 +14,8 @@ use super::{
     mailing_contact_handler::create_mailing_contact_routes,
     mailing_subscription_handler::create_mailing_subscription_routes,
     opt_out_reason_handler::create_opt_out_reason_routes,
-    mailing_handler::create_mailing_routes,
-    mailing_trace_handler::create_mailing_trace_routes,
+    mailing_handler::create_mailing_read_routes,
+    mailing_trace_handler::create_mailing_trace_read_routes,
     mailing_filter_handler::create_mailing_filter_routes,
 };
 
@@ -69,10 +69,10 @@ pub fn configure_routes(services: HttpServices) -> Router {
         .merge(create_mailing_subscription_routes(services.mailing_subscription))
         // OptOutReason routes (12 Backbone endpoints)
         .merge(create_opt_out_reason_routes(services.opt_out_reason))
-        // Mailing routes (12 Backbone endpoints)
-        .merge(create_mailing_routes(services.mailing))
-        // MailingTrace routes (12 Backbone endpoints)
-        .merge(create_mailing_trace_routes(services.mailing_trace))
+        // Mailing routes (READ-ONLY mount — hand_set lifecycle; the state field moves only through the module's validated verbs)
+        .merge(create_mailing_read_routes(services.mailing))
+        // MailingTrace routes (READ-ONLY mount — hand_set lifecycle; the state field moves only through the module's validated verbs)
+        .merge(create_mailing_trace_read_routes(services.mailing_trace))
         // MailingFilter routes (12 Backbone endpoints)
         .merge(create_mailing_filter_routes(services.mailing_filter))
 }
@@ -102,11 +102,11 @@ pub mod individual {
     }
 
     pub fn mailing_routes(service: Arc<MailingService>) -> Router {
-        create_mailing_routes(service)
+        create_mailing_read_routes(service)
     }
 
     pub fn mailing_trace_routes(service: Arc<MailingTraceService>) -> Router {
-        create_mailing_trace_routes(service)
+        create_mailing_trace_read_routes(service)
     }
 
     pub fn mailing_filter_routes(service: Arc<MailingFilterService>) -> Router {

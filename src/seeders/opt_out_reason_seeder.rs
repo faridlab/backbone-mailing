@@ -36,7 +36,7 @@ impl Seeder for SeedOptOutReasonSeeder {
     }
 
     fn order(&self) -> i32 {
-        5
+        3
     }
 
     async fn should_run(&self, pool: &PgPool) -> Result<bool> {

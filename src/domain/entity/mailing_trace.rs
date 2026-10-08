@@ -328,6 +328,9 @@ impl super::Entity for MailingTrace {
 }
 
 impl backbone_core::PersistentEntity for MailingTrace {
+    fn write_protected_fields() -> &'static [&'static str] {
+        &["trace_status"]
+    }
     fn entity_id(&self) -> String {
         self.id.to_string()
     }

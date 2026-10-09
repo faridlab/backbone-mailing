@@ -43,7 +43,7 @@ pub struct MailingPaginatedResult {
 
 /// Filter parameters for list queries
 #[derive(Debug, Clone, Default)]
-pub struct MailingFilter {
+pub struct MailingRepositoryFilter {
     pub subject: Option<String>,
     pub preview: Option<String>,
     pub body_html: Option<String>,
@@ -65,7 +65,7 @@ pub struct MailingFilter {
     pub kpi_mail_required: Option<bool>,
 }
 
-impl MailingFilter {
+impl MailingRepositoryFilter {
     /// Check if any filter is set
     pub fn has_filters(&self) -> bool {
         self.subject.is_some() || self.preview.is_some() || self.body_html.is_some() || self.body_plaintext.is_some() || self.email_from.is_some() || self.reply_to.is_some() || self.keep_archives.is_some() || self.state.is_some() || self.schedule_type.is_some() || self.mailing_type.is_some() || self.target_model.is_some() || self.use_exclusion_list.is_some() || self.campaign_id.is_some() || self.medium_id.is_some() || self.source_id.is_some() || self.user_id.is_some() || self.ab_testing_enabled.is_some() || self.ab_test_id.is_some() || self.kpi_mail_required.is_some()
@@ -106,13 +106,13 @@ pub trait MailingRepository: Send + Sync {
     async fn list(&self, params: MailingPaginationParams) -> Result<MailingPaginatedResult>;
 
     /// List mailing with pagination and filters
-    async fn list_with_filters(&self, params: MailingPaginationParams, filters: MailingFilter) -> Result<MailingPaginatedResult>;
+    async fn list_with_filters(&self, params: MailingPaginationParams, filters: MailingRepositoryFilter) -> Result<MailingPaginatedResult>;
 
     /// Count all mailing entities
     async fn count(&self) -> Result<u64>;
 
     /// Count mailing entities matching filters
-    async fn count_with_filters(&self, filters: MailingFilter) -> Result<u64>;
+    async fn count_with_filters(&self, filters: MailingRepositoryFilter) -> Result<u64>;
 
     /// Check if mailing exists by ID
     async fn exists(&self, id: &str) -> Result<bool>;

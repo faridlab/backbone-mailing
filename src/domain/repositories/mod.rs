@@ -50,7 +50,7 @@ pub use mailing_repository::{
     MailingRepository,
     MailingPaginationParams,
     MailingPaginatedResult,
-    MailingFilter,
+    MailingRepositoryFilter,
 };
 pub use mailing_trace_repository::{
     MailingTraceRepository,

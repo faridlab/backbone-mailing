@@ -9,7 +9,7 @@ use super::MailingType;
 use super::MailingTargetModel;
 use super::AuditMetadata;
 
-use crate::domain::state_machine::{mailing_stateStateMachine, mailing_stateState, StateMachineError};
+use crate::domain::state_machine::{MailingStateStateMachine, MailingStateState, StateMachineError};
 
 /// Strongly-typed ID for Mailing
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -243,9 +243,9 @@ impl Mailing {
     ///
     /// Returns `Err` if the transition is not permitted from the current state.
     /// Use this method instead of assigning `self.state` directly.
-    pub fn transition_to(&mut self, new_state: mailing_stateState) -> Result<(), StateMachineError> {
-        let current = self.state.to_string().parse::<mailing_stateState>()?;
-        let mut sm = mailing_stateStateMachine::from_state(current);
+    pub fn transition_to(&mut self, new_state: MailingStateState) -> Result<(), StateMachineError> {
+        let current = self.state.to_string().parse::<MailingStateState>()?;
+        let mut sm = MailingStateStateMachine::from_state(current);
         sm.transition_to_state(new_state)?;
         self.state = new_state.to_string().parse::<MailingState>()
             .map_err(|e| StateMachineError::InvalidState(e.to_string()))?;

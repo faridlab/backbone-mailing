@@ -28,7 +28,7 @@ use crate::application::service::{MailingTraceService, ServiceError};
 // DTO imports
 use crate::presentation::dto::{CreateMailingTraceDto, UpdateMailingTraceDto, PatchMailingTraceDto, MailingTraceResponseDto};
 
-use crate::domain::state_machine::{trace_statusState, trace_statusStateMachine, trace_statusTransition};
+use crate::domain::state_machine::{TraceStatusState, TraceStatusStateMachine, TraceStatusTransition};
 
 /// Application error type
 #[derive(Debug, thiserror::Error)]
@@ -213,7 +213,7 @@ pub async fn set_process_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = trace_statusTransition::SetProcess.allowed_roles();
+        let allowed_roles = TraceStatusTransition::SetProcess.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_process");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
         if !has_specific_perm && !has_update_perm {
@@ -222,10 +222,10 @@ pub async fn set_process_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: trace_statusState = entity.trace_status.to_string().parse()
-        .unwrap_or(trace_statusState::default());
-    let sm = trace_statusStateMachine::from_state(current_state);
-    if !sm.can_transition(trace_statusTransition::SetProcess) {
+    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
+        .unwrap_or(TraceStatusState::default());
+    let sm = TraceStatusStateMachine::from_state(current_state);
+    if !sm.can_transition(TraceStatusTransition::SetProcess) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -263,7 +263,7 @@ pub async fn set_pending_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = trace_statusTransition::SetPending.allowed_roles();
+        let allowed_roles = TraceStatusTransition::SetPending.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_pending");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
         if !has_specific_perm && !has_update_perm {
@@ -272,10 +272,10 @@ pub async fn set_pending_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: trace_statusState = entity.trace_status.to_string().parse()
-        .unwrap_or(trace_statusState::default());
-    let sm = trace_statusStateMachine::from_state(current_state);
-    if !sm.can_transition(trace_statusTransition::SetPending) {
+    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
+        .unwrap_or(TraceStatusState::default());
+    let sm = TraceStatusStateMachine::from_state(current_state);
+    if !sm.can_transition(TraceStatusTransition::SetPending) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -313,7 +313,7 @@ pub async fn set_sent_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = trace_statusTransition::SetSent.allowed_roles();
+        let allowed_roles = TraceStatusTransition::SetSent.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_sent");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
         if !has_specific_perm && !has_update_perm {
@@ -322,10 +322,10 @@ pub async fn set_sent_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: trace_statusState = entity.trace_status.to_string().parse()
-        .unwrap_or(trace_statusState::default());
-    let sm = trace_statusStateMachine::from_state(current_state);
-    if !sm.can_transition(trace_statusTransition::SetSent) {
+    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
+        .unwrap_or(TraceStatusState::default());
+    let sm = TraceStatusStateMachine::from_state(current_state);
+    if !sm.can_transition(TraceStatusTransition::SetSent) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -363,7 +363,7 @@ pub async fn set_opened_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = trace_statusTransition::SetOpened.allowed_roles();
+        let allowed_roles = TraceStatusTransition::SetOpened.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_opened");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
         if !has_specific_perm && !has_update_perm {
@@ -372,10 +372,10 @@ pub async fn set_opened_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: trace_statusState = entity.trace_status.to_string().parse()
-        .unwrap_or(trace_statusState::default());
-    let sm = trace_statusStateMachine::from_state(current_state);
-    if !sm.can_transition(trace_statusTransition::SetOpened) {
+    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
+        .unwrap_or(TraceStatusState::default());
+    let sm = TraceStatusStateMachine::from_state(current_state);
+    if !sm.can_transition(TraceStatusTransition::SetOpened) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -413,7 +413,7 @@ pub async fn set_replied_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = trace_statusTransition::SetReplied.allowed_roles();
+        let allowed_roles = TraceStatusTransition::SetReplied.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_replied");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
         if !has_specific_perm && !has_update_perm {
@@ -422,10 +422,10 @@ pub async fn set_replied_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: trace_statusState = entity.trace_status.to_string().parse()
-        .unwrap_or(trace_statusState::default());
-    let sm = trace_statusStateMachine::from_state(current_state);
-    if !sm.can_transition(trace_statusTransition::SetReplied) {
+    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
+        .unwrap_or(TraceStatusState::default());
+    let sm = TraceStatusStateMachine::from_state(current_state);
+    if !sm.can_transition(TraceStatusTransition::SetReplied) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -463,7 +463,7 @@ pub async fn set_bounced_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = trace_statusTransition::SetBounced.allowed_roles();
+        let allowed_roles = TraceStatusTransition::SetBounced.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_bounced");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
         if !has_specific_perm && !has_update_perm {
@@ -472,10 +472,10 @@ pub async fn set_bounced_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: trace_statusState = entity.trace_status.to_string().parse()
-        .unwrap_or(trace_statusState::default());
-    let sm = trace_statusStateMachine::from_state(current_state);
-    if !sm.can_transition(trace_statusTransition::SetBounced) {
+    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
+        .unwrap_or(TraceStatusState::default());
+    let sm = TraceStatusStateMachine::from_state(current_state);
+    if !sm.can_transition(TraceStatusTransition::SetBounced) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -513,7 +513,7 @@ pub async fn set_bounced_sms_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = trace_statusTransition::SetBouncedSms.allowed_roles();
+        let allowed_roles = TraceStatusTransition::SetBouncedSms.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_bounced_sms");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
         if !has_specific_perm && !has_update_perm {
@@ -522,10 +522,10 @@ pub async fn set_bounced_sms_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: trace_statusState = entity.trace_status.to_string().parse()
-        .unwrap_or(trace_statusState::default());
-    let sm = trace_statusStateMachine::from_state(current_state);
-    if !sm.can_transition(trace_statusTransition::SetBouncedSms) {
+    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
+        .unwrap_or(TraceStatusState::default());
+    let sm = TraceStatusStateMachine::from_state(current_state);
+    if !sm.can_transition(TraceStatusTransition::SetBouncedSms) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -563,7 +563,7 @@ pub async fn set_failed_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = trace_statusTransition::SetFailed.allowed_roles();
+        let allowed_roles = TraceStatusTransition::SetFailed.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_failed");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
         if !has_specific_perm && !has_update_perm {
@@ -572,10 +572,10 @@ pub async fn set_failed_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: trace_statusState = entity.trace_status.to_string().parse()
-        .unwrap_or(trace_statusState::default());
-    let sm = trace_statusStateMachine::from_state(current_state);
-    if !sm.can_transition(trace_statusTransition::SetFailed) {
+    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
+        .unwrap_or(TraceStatusState::default());
+    let sm = TraceStatusStateMachine::from_state(current_state);
+    if !sm.can_transition(TraceStatusTransition::SetFailed) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -613,7 +613,7 @@ pub async fn set_canceled_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = trace_statusTransition::SetCanceled.allowed_roles();
+        let allowed_roles = TraceStatusTransition::SetCanceled.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_canceled");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
         if !has_specific_perm && !has_update_perm {
@@ -622,10 +622,10 @@ pub async fn set_canceled_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: trace_statusState = entity.trace_status.to_string().parse()
-        .unwrap_or(trace_statusState::default());
-    let sm = trace_statusStateMachine::from_state(current_state);
-    if !sm.can_transition(trace_statusTransition::SetCanceled) {
+    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
+        .unwrap_or(TraceStatusState::default());
+    let sm = TraceStatusStateMachine::from_state(current_state);
+    if !sm.can_transition(TraceStatusTransition::SetCanceled) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
     }
 

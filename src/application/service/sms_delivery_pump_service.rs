@@ -157,7 +157,7 @@ impl SmsDeliveryPumpService {
         // stays landed.
         let verdicts = {
             let mut conn = self.pool.acquire().await?;
-            TraceRepository::sms_traces_with_tracker_verdicts(&mut conn).await?
+            TraceRepository::sms_traces_with_tracker_verdicts(&mut conn, TRACE_BATCH).await?
         };
         for verdict in &verdicts {
             if self.apply_verdict(verdict).await? {

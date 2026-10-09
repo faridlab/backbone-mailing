@@ -28,7 +28,7 @@ use crate::application::service::{MailingService, ServiceError};
 // DTO imports
 use crate::presentation::dto::{CreateMailingDto, UpdateMailingDto, PatchMailingDto, MailingResponseDto};
 
-use crate::domain::state_machine::{mailing_stateState, mailing_stateStateMachine, mailing_stateTransition};
+use crate::domain::state_machine::{MailingStateState, MailingStateStateMachine, MailingStateTransition};
 
 /// Application error type
 #[derive(Debug, thiserror::Error)]
@@ -213,7 +213,7 @@ pub async fn launch_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = mailing_stateTransition::Launch.allowed_roles();
+        let allowed_roles = MailingStateTransition::Launch.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:launch");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
         if !has_specific_perm && !has_update_perm {
@@ -222,10 +222,10 @@ pub async fn launch_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: mailing_stateState = entity.state.to_string().parse()
-        .unwrap_or(mailing_stateState::default());
-    let sm = mailing_stateStateMachine::from_state(current_state);
-    if !sm.can_transition(mailing_stateTransition::Launch) {
+    let current_state: MailingStateState = entity.state.to_string().parse()
+        .unwrap_or(MailingStateState::default());
+    let sm = MailingStateStateMachine::from_state(current_state);
+    if !sm.can_transition(MailingStateTransition::Launch) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -263,7 +263,7 @@ pub async fn pickup_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = mailing_stateTransition::Pickup.allowed_roles();
+        let allowed_roles = MailingStateTransition::Pickup.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:pickup");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
         if !has_specific_perm && !has_update_perm {
@@ -272,10 +272,10 @@ pub async fn pickup_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: mailing_stateState = entity.state.to_string().parse()
-        .unwrap_or(mailing_stateState::default());
-    let sm = mailing_stateStateMachine::from_state(current_state);
-    if !sm.can_transition(mailing_stateTransition::Pickup) {
+    let current_state: MailingStateState = entity.state.to_string().parse()
+        .unwrap_or(MailingStateState::default());
+    let sm = MailingStateStateMachine::from_state(current_state);
+    if !sm.can_transition(MailingStateTransition::Pickup) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -313,7 +313,7 @@ pub async fn complete_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = mailing_stateTransition::Complete.allowed_roles();
+        let allowed_roles = MailingStateTransition::Complete.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:complete");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
         if !has_specific_perm && !has_update_perm {
@@ -322,10 +322,10 @@ pub async fn complete_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: mailing_stateState = entity.state.to_string().parse()
-        .unwrap_or(mailing_stateState::default());
-    let sm = mailing_stateStateMachine::from_state(current_state);
-    if !sm.can_transition(mailing_stateTransition::Complete) {
+    let current_state: MailingStateState = entity.state.to_string().parse()
+        .unwrap_or(MailingStateState::default());
+    let sm = MailingStateStateMachine::from_state(current_state);
+    if !sm.can_transition(MailingStateTransition::Complete) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -363,7 +363,7 @@ pub async fn complete_empty_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = mailing_stateTransition::CompleteEmpty.allowed_roles();
+        let allowed_roles = MailingStateTransition::CompleteEmpty.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:complete_empty");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
         if !has_specific_perm && !has_update_perm {
@@ -372,10 +372,10 @@ pub async fn complete_empty_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: mailing_stateState = entity.state.to_string().parse()
-        .unwrap_or(mailing_stateState::default());
-    let sm = mailing_stateStateMachine::from_state(current_state);
-    if !sm.can_transition(mailing_stateTransition::CompleteEmpty) {
+    let current_state: MailingStateState = entity.state.to_string().parse()
+        .unwrap_or(MailingStateState::default());
+    let sm = MailingStateStateMachine::from_state(current_state);
+    if !sm.can_transition(MailingStateTransition::CompleteEmpty) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -413,7 +413,7 @@ pub async fn cancel_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = mailing_stateTransition::Cancel.allowed_roles();
+        let allowed_roles = MailingStateTransition::Cancel.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:cancel");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
         if !has_specific_perm && !has_update_perm {
@@ -422,10 +422,10 @@ pub async fn cancel_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: mailing_stateState = entity.state.to_string().parse()
-        .unwrap_or(mailing_stateState::default());
-    let sm = mailing_stateStateMachine::from_state(current_state);
-    if !sm.can_transition(mailing_stateTransition::Cancel) {
+    let current_state: MailingStateState = entity.state.to_string().parse()
+        .unwrap_or(MailingStateState::default());
+    let sm = MailingStateStateMachine::from_state(current_state);
+    if !sm.can_transition(MailingStateTransition::Cancel) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
     }
 
@@ -463,7 +463,7 @@ pub async fn retry_failed_transition(
     // Check permission (if auth enabled)
     #[cfg(feature = "auth")]
     {
-        let allowed_roles = mailing_stateTransition::RetryFailed.allowed_roles();
+        let allowed_roles = MailingStateTransition::RetryFailed.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:retry_failed");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
         if !has_specific_perm && !has_update_perm {
@@ -472,10 +472,10 @@ pub async fn retry_failed_transition(
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: mailing_stateState = entity.state.to_string().parse()
-        .unwrap_or(mailing_stateState::default());
-    let sm = mailing_stateStateMachine::from_state(current_state);
-    if !sm.can_transition(mailing_stateTransition::RetryFailed) {
+    let current_state: MailingStateState = entity.state.to_string().parse()
+        .unwrap_or(MailingStateState::default());
+    let sm = MailingStateStateMachine::from_state(current_state);
+    if !sm.can_transition(MailingStateTransition::RetryFailed) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
     }
 

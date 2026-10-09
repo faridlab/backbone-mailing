@@ -29,5 +29,5 @@ pub enum StateMachineError {
     FinalStateReached(String),
 }
 
-pub use mailing_state_state_machine::{mailing_stateState, mailing_stateTransition, mailing_stateStateMachine};
-pub use trace_status_state_machine::{trace_statusState, trace_statusTransition, trace_statusStateMachine};
+pub use mailing_state_state_machine::{MailingStateState, MailingStateTransition, MailingStateStateMachine};
+pub use trace_status_state_machine::{TraceStatusState, TraceStatusTransition, TraceStatusStateMachine};

@@ -22,6 +22,6 @@ pub type MailingTraceTriggerHandlerObj =
 
 /// Create a default registry pre-populated with all handlers for MailingTrace.
 pub fn mailing_trace_trigger_registry() -> MailingTraceTriggerRegistry {
-    TriggerRegistry::build(|r| {
+    TriggerRegistry::build(|_r| {
     })
 }

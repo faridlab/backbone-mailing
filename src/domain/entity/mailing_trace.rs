@@ -8,7 +8,7 @@ use super::TraceStatus;
 use super::TraceFailureType;
 use super::AuditMetadata;
 
-use crate::domain::state_machine::{trace_statusStateMachine, trace_statusState, StateMachineError};
+use crate::domain::state_machine::{TraceStatusStateMachine, TraceStatusState, StateMachineError};
 
 /// Strongly-typed ID for MailingTrace
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -238,9 +238,9 @@ impl MailingTrace {
     ///
     /// Returns `Err` if the transition is not permitted from the current state.
     /// Use this method instead of assigning `self.trace_status` directly.
-    pub fn transition_to(&mut self, new_state: trace_statusState) -> Result<(), StateMachineError> {
-        let current = self.trace_status.to_string().parse::<trace_statusState>()?;
-        let mut sm = trace_statusStateMachine::from_state(current);
+    pub fn transition_to(&mut self, new_state: TraceStatusState) -> Result<(), StateMachineError> {
+        let current = self.trace_status.to_string().parse::<TraceStatusState>()?;
+        let mut sm = TraceStatusStateMachine::from_state(current);
         sm.transition_to_state(new_state)?;
         self.trace_status = new_state.to_string().parse::<TraceStatus>()
             .map_err(|e| StateMachineError::InvalidState(e.to_string()))?;

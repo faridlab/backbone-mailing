@@ -606,6 +606,7 @@ impl TraceRepository {
     /// tracker is a substrate invariant violation worth leaving visible.
     pub async fn sms_traces_with_tracker_verdicts(
         conn: &mut PgConnection,
+        limit: i64,
     ) -> Result<Vec<SmsTraceVerdict>, sqlx::Error> {
         sqlx::query_as::<_, SmsTraceVerdict>(
             r#"SELECT t.id AS trace_id,
@@ -618,8 +619,9 @@ impl TraceRepository {
                  AND t.trace_status IN ('outgoing', 'process', 'pending')
                  AND (t.metadata->>'deleted_at') IS NULL
                ORDER BY t.id
-               LIMIT 5000"#,
+               LIMIT $1"#,
         )
+        .bind(limit)
         .fetch_all(&mut *conn)
         .await
     }

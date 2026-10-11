@@ -215,8 +215,13 @@ pub async fn set_process_transition(
     };
     {
         let allowed_roles = TraceStatusTransition::SetProcess.allowed_roles();
-        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_process");
-        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        let granted = |required: &str| auth.permissions.iter().any(|p| {
+            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
+            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
+                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
+        });
+        let has_specific_perm = granted("mailing_trace:transition:set_process");
+        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
             if !has_update_perm {
@@ -273,8 +278,13 @@ pub async fn set_pending_transition(
     };
     {
         let allowed_roles = TraceStatusTransition::SetPending.allowed_roles();
-        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_pending");
-        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        let granted = |required: &str| auth.permissions.iter().any(|p| {
+            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
+            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
+                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
+        });
+        let has_specific_perm = granted("mailing_trace:transition:set_pending");
+        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
             if !has_update_perm {
@@ -331,8 +341,13 @@ pub async fn set_sent_transition(
     };
     {
         let allowed_roles = TraceStatusTransition::SetSent.allowed_roles();
-        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_sent");
-        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        let granted = |required: &str| auth.permissions.iter().any(|p| {
+            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
+            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
+                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
+        });
+        let has_specific_perm = granted("mailing_trace:transition:set_sent");
+        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
             if !has_update_perm {
@@ -389,8 +404,13 @@ pub async fn set_opened_transition(
     };
     {
         let allowed_roles = TraceStatusTransition::SetOpened.allowed_roles();
-        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_opened");
-        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        let granted = |required: &str| auth.permissions.iter().any(|p| {
+            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
+            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
+                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
+        });
+        let has_specific_perm = granted("mailing_trace:transition:set_opened");
+        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
             if !has_update_perm {
@@ -447,8 +467,13 @@ pub async fn set_replied_transition(
     };
     {
         let allowed_roles = TraceStatusTransition::SetReplied.allowed_roles();
-        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_replied");
-        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        let granted = |required: &str| auth.permissions.iter().any(|p| {
+            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
+            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
+                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
+        });
+        let has_specific_perm = granted("mailing_trace:transition:set_replied");
+        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
             if !has_update_perm {
@@ -505,8 +530,13 @@ pub async fn set_bounced_transition(
     };
     {
         let allowed_roles = TraceStatusTransition::SetBounced.allowed_roles();
-        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_bounced");
-        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        let granted = |required: &str| auth.permissions.iter().any(|p| {
+            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
+            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
+                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
+        });
+        let has_specific_perm = granted("mailing_trace:transition:set_bounced");
+        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
             if !has_update_perm {
@@ -563,8 +593,13 @@ pub async fn set_bounced_sms_transition(
     };
     {
         let allowed_roles = TraceStatusTransition::SetBouncedSms.allowed_roles();
-        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_bounced_sms");
-        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        let granted = |required: &str| auth.permissions.iter().any(|p| {
+            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
+            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
+                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
+        });
+        let has_specific_perm = granted("mailing_trace:transition:set_bounced_sms");
+        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
             if !has_update_perm {
@@ -621,8 +656,13 @@ pub async fn set_failed_transition(
     };
     {
         let allowed_roles = TraceStatusTransition::SetFailed.allowed_roles();
-        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_failed");
-        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        let granted = |required: &str| auth.permissions.iter().any(|p| {
+            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
+            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
+                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
+        });
+        let has_specific_perm = granted("mailing_trace:transition:set_failed");
+        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
             if !has_update_perm {
@@ -679,8 +719,13 @@ pub async fn set_canceled_transition(
     };
     {
         let allowed_roles = TraceStatusTransition::SetCanceled.allowed_roles();
-        let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_canceled");
-        let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
+        let granted = |required: &str| auth.permissions.iter().any(|p| {
+            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
+            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
+                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
+        });
+        let has_specific_perm = granted("mailing_trace:transition:set_canceled");
+        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
             if !has_update_perm {

@@ -20,6 +20,7 @@ model: Mailing
 
 states:
   field: state
+  verbs: hand
   values:
     draft:
       initial: true

@@ -32,3 +32,35 @@ pub type MailingService = GenericCrudService<
     MailingRepository,
 >;
 
+/// The row rules the schema declares for Mailing, checked against the row a create or
+/// update would store. The generated build attaches it to [`MailingService`]. Every rule
+/// runs in shadow: a break is logged under `backbone::write_guard` and the write goes ahead.
+pub struct MailingRowRules;
+
+#[async_trait::async_trait]
+impl backbone_core::write_guard::WriteGuard<Mailing> for MailingRowRules {
+    async fn check(
+        &self,
+        ctx: &backbone_core::write_guard::WriteCtx<'_, Mailing>,
+    ) -> backbone_core::write_guard::GuardOutcome {
+        use backbone_core::row_rule as r;
+        use backbone_core::violation::Violation;
+        use backbone_core::write_guard::{GuardOutcome, WriteKind};
+        let (create, update) = (ctx.kind == WriteKind::Create, ctx.kind == WriteKind::Update);
+        let Some(after) = ctx.after.filter(|_| create || update) else {
+            return GuardOutcome::allow();
+        };
+        let Ok(row) = serde_json::to_value(after) else {
+            return GuardOutcome::allow();
+        };
+        let row = &row;
+        let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
+        let mut shadow = Vec::new();
+        // `state` belongs to a state machine: only its verbs move it
+        if update && ctx.transition.is_none() && r::changed(old.as_ref(), row, &["state"]) {
+            shadow.push(Violation::new("state", "state_field_verbs_only", "the state field moves only through its verbs"));
+        }
+        GuardOutcome { refuse: Vec::new(), shadow }
+    }
+}
+

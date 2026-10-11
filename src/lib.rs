@@ -264,11 +264,11 @@ impl MailingModuleBuilder {
 
         // Mailing service
         let mailing_repository = Arc::new(MailingRepository::new(db_pool.clone()));
-        let mailing_service = Arc::new(MailingService::with_repository(mailing_repository.clone()));
+        let mailing_service = Arc::new(MailingService::with_repository(mailing_repository.clone()).with_guard(Arc::new(crate::application::service::MailingRowRules)));
 
         // MailingTrace service
         let mailing_trace_repository = Arc::new(MailingTraceRepository::new(db_pool.clone()));
-        let mailing_trace_service = Arc::new(MailingTraceService::with_repository(mailing_trace_repository.clone()));
+        let mailing_trace_service = Arc::new(MailingTraceService::with_repository(mailing_trace_repository.clone()).with_guard(Arc::new(crate::application::service::MailingTraceRowRules)));
 
         // MailingFilter service
         let mailing_filter_repository = Arc::new(MailingFilterRepository::new(db_pool.clone()));

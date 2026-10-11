@@ -216,14 +216,20 @@ pub async fn set_process_transition(
         let allowed_roles = TraceStatusTransition::SetProcess.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_process");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_process transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_process transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_process", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_process");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
-        .unwrap_or(TraceStatusState::default());
+    let current_state: TraceStatusState = match entity.trace_status.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingTraceResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = TraceStatusStateMachine::from_state(current_state);
     if !sm.can_transition(TraceStatusTransition::SetProcess) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
@@ -231,9 +237,9 @@ pub async fn set_process_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("trace_status".to_string(), serde_json::Value::String("Process".to_string()));
+    fields.insert("trace_status".to_string(), serde_json::Value::String("process".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("set_process", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingTraceResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -266,14 +272,20 @@ pub async fn set_pending_transition(
         let allowed_roles = TraceStatusTransition::SetPending.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_pending");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_pending transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_pending transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_pending", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_pending");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
-        .unwrap_or(TraceStatusState::default());
+    let current_state: TraceStatusState = match entity.trace_status.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingTraceResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = TraceStatusStateMachine::from_state(current_state);
     if !sm.can_transition(TraceStatusTransition::SetPending) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
@@ -281,9 +293,9 @@ pub async fn set_pending_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("trace_status".to_string(), serde_json::Value::String("Pending".to_string()));
+    fields.insert("trace_status".to_string(), serde_json::Value::String("pending".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("set_pending", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingTraceResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -316,14 +328,20 @@ pub async fn set_sent_transition(
         let allowed_roles = TraceStatusTransition::SetSent.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_sent");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_sent transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_sent transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_sent", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_sent");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
-        .unwrap_or(TraceStatusState::default());
+    let current_state: TraceStatusState = match entity.trace_status.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingTraceResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = TraceStatusStateMachine::from_state(current_state);
     if !sm.can_transition(TraceStatusTransition::SetSent) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
@@ -331,9 +349,9 @@ pub async fn set_sent_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("trace_status".to_string(), serde_json::Value::String("Sent".to_string()));
+    fields.insert("trace_status".to_string(), serde_json::Value::String("sent".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("set_sent", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingTraceResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -366,14 +384,20 @@ pub async fn set_opened_transition(
         let allowed_roles = TraceStatusTransition::SetOpened.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_opened");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_opened transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_opened transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_opened", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_opened");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
-        .unwrap_or(TraceStatusState::default());
+    let current_state: TraceStatusState = match entity.trace_status.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingTraceResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = TraceStatusStateMachine::from_state(current_state);
     if !sm.can_transition(TraceStatusTransition::SetOpened) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
@@ -381,9 +405,9 @@ pub async fn set_opened_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("trace_status".to_string(), serde_json::Value::String("Open".to_string()));
+    fields.insert("trace_status".to_string(), serde_json::Value::String("open".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("set_opened", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingTraceResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -416,14 +440,20 @@ pub async fn set_replied_transition(
         let allowed_roles = TraceStatusTransition::SetReplied.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_replied");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_replied transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_replied transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_replied", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_replied");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
-        .unwrap_or(TraceStatusState::default());
+    let current_state: TraceStatusState = match entity.trace_status.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingTraceResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = TraceStatusStateMachine::from_state(current_state);
     if !sm.can_transition(TraceStatusTransition::SetReplied) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
@@ -431,9 +461,9 @@ pub async fn set_replied_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("trace_status".to_string(), serde_json::Value::String("Reply".to_string()));
+    fields.insert("trace_status".to_string(), serde_json::Value::String("reply".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("set_replied", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingTraceResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -466,14 +496,20 @@ pub async fn set_bounced_transition(
         let allowed_roles = TraceStatusTransition::SetBounced.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_bounced");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_bounced transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_bounced transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_bounced", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_bounced");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
-        .unwrap_or(TraceStatusState::default());
+    let current_state: TraceStatusState = match entity.trace_status.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingTraceResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = TraceStatusStateMachine::from_state(current_state);
     if !sm.can_transition(TraceStatusTransition::SetBounced) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
@@ -481,9 +517,9 @@ pub async fn set_bounced_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("trace_status".to_string(), serde_json::Value::String("Bounce".to_string()));
+    fields.insert("trace_status".to_string(), serde_json::Value::String("bounce".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("set_bounced", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingTraceResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -516,14 +552,20 @@ pub async fn set_bounced_sms_transition(
         let allowed_roles = TraceStatusTransition::SetBouncedSms.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_bounced_sms");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_bounced_sms transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_bounced_sms transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_bounced_sms", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_bounced_sms");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
-        .unwrap_or(TraceStatusState::default());
+    let current_state: TraceStatusState = match entity.trace_status.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingTraceResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = TraceStatusStateMachine::from_state(current_state);
     if !sm.can_transition(TraceStatusTransition::SetBouncedSms) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
@@ -531,9 +573,9 @@ pub async fn set_bounced_sms_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("trace_status".to_string(), serde_json::Value::String("Bounce".to_string()));
+    fields.insert("trace_status".to_string(), serde_json::Value::String("bounce".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("set_bounced_sms", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingTraceResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -566,14 +608,20 @@ pub async fn set_failed_transition(
         let allowed_roles = TraceStatusTransition::SetFailed.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_failed");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_failed transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_failed transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_failed", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_failed");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
-        .unwrap_or(TraceStatusState::default());
+    let current_state: TraceStatusState = match entity.trace_status.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingTraceResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = TraceStatusStateMachine::from_state(current_state);
     if !sm.can_transition(TraceStatusTransition::SetFailed) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
@@ -581,9 +629,9 @@ pub async fn set_failed_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("trace_status".to_string(), serde_json::Value::String("Error".to_string()));
+    fields.insert("trace_status".to_string(), serde_json::Value::String("error".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("set_failed", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingTraceResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -616,14 +664,20 @@ pub async fn set_canceled_transition(
         let allowed_roles = TraceStatusTransition::SetCanceled.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_canceled");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing_trace:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_canceled transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_canceled transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_canceled", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_canceled");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: TraceStatusState = entity.trace_status.to_string().parse()
-        .unwrap_or(TraceStatusState::default());
+    let current_state: TraceStatusState = match entity.trace_status.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingTraceResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = TraceStatusStateMachine::from_state(current_state);
     if !sm.can_transition(TraceStatusTransition::SetCanceled) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingTraceResponseDto>::error("Transition not allowed from current state")));
@@ -631,9 +685,9 @@ pub async fn set_canceled_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("trace_status".to_string(), serde_json::Value::String("Cancel".to_string()));
+    fields.insert("trace_status".to_string(), serde_json::Value::String("cancel".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("set_canceled", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingTraceResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))

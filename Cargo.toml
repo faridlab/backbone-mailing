@@ -1,6 +1,6 @@
 [package]
 name = "backbone-mailing"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 description = "Email marketing — mass-mail engine: audiences, subscriptions, hand-set mailing lifecycle, seeded A/B testing, per-recipient traces, cycle-44 bridge targets (Odoo mass_mailing port)"
 license = "MIT OR Apache-2.0"
@@ -20,7 +20,7 @@ path = "src/lib.rs"
 # or `rev = "<commit-sha>"`. Cargo dedupes the git fetch — the repo is only
 # cloned once even though four crates reference it.
 # -----------------------------------------------------------------------------
-backbone-core = { version = "3.0.0", features = ["postgres"] }
+backbone-core = { version = "3.7.0", features = ["postgres"] }
 backbone-orm = { version = "3.0.0" }
 backbone-auth = { version = "3.0.0" }
 backbone-messaging = { version = "3.0.0" }

@@ -216,14 +216,20 @@ pub async fn launch_transition(
         let allowed_roles = MailingStateTransition::Launch.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:launch");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for launch transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for launch transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "launch", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:launch");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: MailingStateState = entity.state.to_string().parse()
-        .unwrap_or(MailingStateState::default());
+    let current_state: MailingStateState = match entity.state.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::Launch) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
@@ -231,9 +237,9 @@ pub async fn launch_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("state".to_string(), serde_json::Value::String("InQueue".to_string()));
+    fields.insert("state".to_string(), serde_json::Value::String("in_queue".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("launch", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -266,14 +272,20 @@ pub async fn pickup_transition(
         let allowed_roles = MailingStateTransition::Pickup.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:pickup");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for pickup transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for pickup transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "pickup", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:pickup");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: MailingStateState = entity.state.to_string().parse()
-        .unwrap_or(MailingStateState::default());
+    let current_state: MailingStateState = match entity.state.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::Pickup) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
@@ -281,9 +293,9 @@ pub async fn pickup_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("state".to_string(), serde_json::Value::String("Sending".to_string()));
+    fields.insert("state".to_string(), serde_json::Value::String("sending".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("pickup", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -316,14 +328,20 @@ pub async fn complete_transition(
         let allowed_roles = MailingStateTransition::Complete.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:complete");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for complete transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for complete transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "complete", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:complete");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: MailingStateState = entity.state.to_string().parse()
-        .unwrap_or(MailingStateState::default());
+    let current_state: MailingStateState = match entity.state.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::Complete) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
@@ -331,9 +349,9 @@ pub async fn complete_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("state".to_string(), serde_json::Value::String("Done".to_string()));
+    fields.insert("state".to_string(), serde_json::Value::String("done".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("complete", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -366,14 +384,20 @@ pub async fn complete_empty_transition(
         let allowed_roles = MailingStateTransition::CompleteEmpty.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:complete_empty");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for complete_empty transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for complete_empty transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "complete_empty", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:complete_empty");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: MailingStateState = entity.state.to_string().parse()
-        .unwrap_or(MailingStateState::default());
+    let current_state: MailingStateState = match entity.state.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::CompleteEmpty) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
@@ -381,9 +405,9 @@ pub async fn complete_empty_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("state".to_string(), serde_json::Value::String("Done".to_string()));
+    fields.insert("state".to_string(), serde_json::Value::String("done".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("complete_empty", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -416,14 +440,20 @@ pub async fn cancel_transition(
         let allowed_roles = MailingStateTransition::Cancel.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:cancel");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for cancel transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for cancel transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "cancel", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:cancel");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: MailingStateState = entity.state.to_string().parse()
-        .unwrap_or(MailingStateState::default());
+    let current_state: MailingStateState = match entity.state.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::Cancel) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
@@ -431,9 +461,9 @@ pub async fn cancel_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("state".to_string(), serde_json::Value::String("Draft".to_string()));
+    fields.insert("state".to_string(), serde_json::Value::String("draft".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("cancel", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -466,14 +496,20 @@ pub async fn retry_failed_transition(
         let allowed_roles = MailingStateTransition::RetryFailed.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing:transition:retry_failed");
         let has_update_perm = auth.permissions.iter().any(|p| p == "mailing:update");
-        if !has_specific_perm && !has_update_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for retry_failed transition")));
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            if !has_update_perm {
+                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for retry_failed transition")));
+            }
+            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "retry_failed", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:retry_failed");
         }
     }
 
     // Create state machine from entity's actual status and validate transition
-    let current_state: MailingStateState = entity.state.to_string().parse()
-        .unwrap_or(MailingStateState::default());
+    let current_state: MailingStateState = match entity.state.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingResponseDto>::error("The stored state is not a state of this machine"))),
+    };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::RetryFailed) {
         return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
@@ -481,9 +517,9 @@ pub async fn retry_failed_transition(
 
     // Apply transition via partial update
     let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
-    fields.insert("state".to_string(), serde_json::Value::String("InQueue".to_string()));
+    fields.insert("state".to_string(), serde_json::Value::String("in_queue".to_string()));
 
-    match service.partial_update(&id, fields).await {
+    match backbone_core::write_guard::as_transition("retry_failed", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))

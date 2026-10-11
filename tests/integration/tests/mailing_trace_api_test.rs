@@ -134,6 +134,4 @@ mod tests {
 // CUSTOM TESTS
 // ============================================================================
 
-// <<< CUSTOM TESTS START >>>
 // Add MailingTrace specific tests here
-// <<< CUSTOM TESTS END >>>

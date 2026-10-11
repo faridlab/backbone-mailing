@@ -16,9 +16,5 @@ pub type MailingFilterValidator = EntityValidator<MailingFilter>;
 pub fn mailing_filter_validator() -> MailingFilterValidator {
     EntityValidator::new()
         .rule(RequiredString::new("name", |e: &MailingFilter| &e.name))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

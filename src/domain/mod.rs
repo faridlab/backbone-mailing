@@ -16,5 +16,3 @@ pub use specifications::*;
 pub use state_machine::*;
 pub use entity::*;
 
-// <<< CUSTOM
-// END CUSTOM

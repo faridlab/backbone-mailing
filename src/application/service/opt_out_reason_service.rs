@@ -32,5 +32,3 @@ pub type OptOutReasonService = GenericCrudService<
     OptOutReasonRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

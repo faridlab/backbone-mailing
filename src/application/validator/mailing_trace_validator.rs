@@ -21,9 +21,5 @@ pub fn mailing_trace_validator() -> MailingTraceValidator {
         .rule(OptionalNotBlank::new("recipient_phone", |e: &MailingTrace| e.recipient_phone.as_deref()))
         .rule(OptionalNotBlank::new("message_id", |e: &MailingTrace| e.message_id.as_deref()))
         .rule(OptionalNotBlank::new("failure_reason", |e: &MailingTrace| e.failure_reason.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

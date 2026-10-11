@@ -275,7 +275,7 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingSubscriptionDto> for MailingSubs
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to MailingSubscription here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

@@ -8,8 +8,6 @@
 pub use backbone_core::{ModuleAdapter, ProjectionAdapter, IntegrationError};
 pub use backbone_messaging::SubscriberRegistry;
 
-// <<< CUSTOM
 // Declare adapter modules for each external dependency. Example:
 // pub mod bucket_adapter;
 // pub use bucket_adapter::BucketToBersihirAdapter;
-// END CUSTOM

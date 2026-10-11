@@ -73,6 +73,5 @@ pub enum SeederType {
 // CUSTOM SEEDERS
 // ============================================================================
 
-// <<< CUSTOM SEEDERS START >>>
 // Add custom seeders here
-// <<< CUSTOM SEEDERS END >>>
+

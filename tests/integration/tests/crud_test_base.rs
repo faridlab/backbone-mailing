@@ -323,6 +323,4 @@ impl<G: TestDataGenerator> GenericCrudTest<G> {
 // CUSTOM TESTS
 // ============================================================================
 
-// <<< CUSTOM TESTS START >>>
 // Add custom test utilities here
-// <<< CUSTOM TESTS END >>>

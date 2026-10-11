@@ -16,9 +16,5 @@ pub type OptOutReasonValidator = EntityValidator<OptOutReason>;
 pub fn opt_out_reason_validator() -> OptOutReasonValidator {
     EntityValidator::new()
         .rule(RequiredString::new("name", |e: &OptOutReason| &e.name))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

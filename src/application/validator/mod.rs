@@ -23,5 +23,3 @@ pub use mailing_validator::{MailingValidator, mailing_validator};
 pub use mailing_trace_validator::{MailingTraceValidator, mailing_trace_validator};
 pub use mailing_filter_validator::{MailingFilterValidator, mailing_filter_validator};
 
-// <<< CUSTOM
-// END CUSTOM

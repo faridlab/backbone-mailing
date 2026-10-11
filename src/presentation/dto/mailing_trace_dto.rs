@@ -444,7 +444,7 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingTraceDto> for MailingTrace {
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to MailingTrace here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

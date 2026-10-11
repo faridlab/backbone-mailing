@@ -109,6 +109,4 @@ mod tests {
 // CUSTOM TESTS
 // ============================================================================
 
-// <<< CUSTOM TESTS START >>>
 // Add MailingContact specific tests here
-// <<< CUSTOM TESTS END >>>

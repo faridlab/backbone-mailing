@@ -22,9 +22,5 @@ pub fn mailing_contact_validator() -> MailingContactValidator {
         .rule(OptionalNotBlank::new("company_name", |e: &MailingContact| e.company_name.as_deref()))
         .rule(OptionalNotBlank::new("country_code", |e: &MailingContact| e.country_code.as_deref()))
         .rule(OptionalNotBlank::new("phone", |e: &MailingContact| e.phone.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

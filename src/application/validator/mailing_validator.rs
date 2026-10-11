@@ -21,9 +21,5 @@ pub fn mailing_validator() -> MailingValidator {
         .rule(OptionalNotBlank::new("body_plaintext", |e: &Mailing| e.body_plaintext.as_deref()))
         .rule(RequiredString::new("email_from", |e: &Mailing| &e.email_from))
         .rule(OptionalNotBlank::new("reply_to", |e: &Mailing| e.reply_to.as_deref()))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

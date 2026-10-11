@@ -14,8 +14,6 @@ pub mod mailing_handler;
 pub mod mailing_trace_handler;
 pub mod mailing_filter_handler;
 
-// <<< CUSTOM
-// END CUSTOM
 
 // Re-exports
 pub use mailing_ab_test_handler::{create_mailing_ab_test_routes, create_mailing_ab_test_read_routes, create_mailing_ab_test_write_routes};
@@ -26,8 +24,6 @@ pub use opt_out_reason_handler::{create_opt_out_reason_routes, create_opt_out_re
 pub use mailing_handler::{create_mailing_routes, create_mailing_read_routes, create_mailing_write_routes};
 pub use mailing_trace_handler::{create_mailing_trace_routes, create_mailing_trace_read_routes, create_mailing_trace_write_routes};
 pub use mailing_filter_handler::{create_mailing_filter_routes, create_mailing_filter_read_routes, create_mailing_filter_write_routes};
-// <<< CUSTOM
-// END CUSTOM
 
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

@@ -506,3 +506,4 @@ pub fn create_mailing_transition_routes(service: Arc<MailingService>) -> Router 
         .route("/mailings/:id/transitions/retry_failed", post(retry_failed_transition))
         .with_state(service)
 }
+

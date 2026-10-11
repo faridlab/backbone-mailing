@@ -252,7 +252,7 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingAudienceDto> for MailingAudience
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to MailingAudience here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

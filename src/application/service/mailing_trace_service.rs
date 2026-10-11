@@ -32,5 +32,3 @@ pub type MailingTraceService = GenericCrudService<
     MailingTraceRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

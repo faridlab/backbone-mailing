@@ -11,8 +11,6 @@ use crate::domain::entity::OptOutReason;
 /// enum containing a `Crud(CrudEvent<OptOutReason>)` variant.
 pub type OptOutReasonEvent = CrudEvent<OptOutReason>;
 
-// <<< CUSTOM
-// END CUSTOM
 
 use backbone_messaging::{CrudEventPublisher, NoOpCrudEventPublisher};
 use std::sync::Arc;

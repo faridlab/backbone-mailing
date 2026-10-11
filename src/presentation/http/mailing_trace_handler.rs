@@ -659,3 +659,4 @@ pub fn create_mailing_trace_transition_routes(service: Arc<MailingTraceService>)
         .route("/mailing_traces/:id/transitions/set_canceled", post(set_canceled_transition))
         .with_state(service)
 }
+

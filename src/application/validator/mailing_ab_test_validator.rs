@@ -16,9 +16,5 @@ pub type MailingAbTestValidator = EntityValidator<MailingAbTest>;
 pub fn mailing_ab_test_validator() -> MailingAbTestValidator {
     EntityValidator::new()
         .rule(RequiredString::new("sampling_seed", |e: &MailingAbTest| &e.sampling_seed))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

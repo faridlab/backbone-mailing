@@ -18,5 +18,3 @@ use crate::domain::entity::MailingAudience;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type MailingAudienceDomainPolicy = PermitAllPolicy<MailingAudience>;
 
-// <<< CUSTOM
-// END CUSTOM

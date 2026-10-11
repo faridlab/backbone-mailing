@@ -245,7 +245,7 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingFilterDto> for MailingFilter {
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to MailingFilter here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

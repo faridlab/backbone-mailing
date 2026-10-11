@@ -18,5 +18,3 @@ use crate::domain::entity::MailingFilter;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type MailingFilterDomainPolicy = PermitAllPolicy<MailingFilter>;
 
-// <<< CUSTOM
-// END CUSTOM

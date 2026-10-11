@@ -36,5 +36,3 @@ pub use mailing_trace_event_handlers::MailingTraceEventHandler;
 pub use mailing_filter_events::{MailingFilterEvent, MailingFilterEventPublisher, NoopMailingFilterEventPublisher};
 pub use mailing_filter_event_handlers::MailingFilterEventHandler;
 
-// <<< CUSTOM
-// END CUSTOM

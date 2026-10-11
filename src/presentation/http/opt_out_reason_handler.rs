@@ -186,3 +186,4 @@ pub fn create_protected_opt_out_reason_routes<A: AuthMiddleware + Send + Sync + 
             }
         }))
 }
+

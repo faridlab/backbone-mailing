@@ -4,5 +4,3 @@
 
 pub mod persistence;
 
-// <<< CUSTOM
-// END CUSTOM

@@ -15,5 +15,3 @@ pub mod mailing_specification;
 pub mod mailing_trace_specification;
 pub mod mailing_filter_specification;
 
-// <<< CUSTOM
-// END CUSTOM

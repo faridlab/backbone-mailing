@@ -186,3 +186,4 @@ pub fn create_protected_mailing_filter_routes<A: AuthMiddleware + Send + Sync + 
             }
         }))
 }
+

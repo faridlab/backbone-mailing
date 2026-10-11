@@ -20,5 +20,3 @@ pub use mailing_domain_policy::MailingDomainPolicy;
 pub use mailing_trace_domain_policy::MailingTraceDomainPolicy;
 pub use mailing_filter_domain_policy::MailingFilterDomainPolicy;
 
-// <<< CUSTOM
-// END CUSTOM

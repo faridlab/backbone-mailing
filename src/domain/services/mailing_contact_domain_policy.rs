@@ -18,5 +18,3 @@ use crate::domain::entity::MailingContact;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type MailingContactDomainPolicy = PermitAllPolicy<MailingContact>;
 
-// <<< CUSTOM
-// END CUSTOM

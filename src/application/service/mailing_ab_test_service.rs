@@ -32,5 +32,3 @@ pub type MailingAbTestService = GenericCrudService<
     MailingAbTestRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

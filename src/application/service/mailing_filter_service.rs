@@ -32,5 +32,3 @@ pub type MailingFilterService = GenericCrudService<
     MailingFilterRepository,
 >;
 
-// <<< CUSTOM
-// END CUSTOM

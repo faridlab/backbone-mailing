@@ -18,5 +18,3 @@ use crate::domain::entity::OptOutReason;
 /// service. `PermitAllPolicy` is the safe default until then.
 pub type OptOutReasonDomainPolicy = PermitAllPolicy<OptOutReason>;
 
-// <<< CUSTOM
-// END CUSTOM

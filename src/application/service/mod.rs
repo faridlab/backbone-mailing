@@ -16,8 +16,6 @@ pub mod mailing_service;
 pub mod mailing_trace_service;
 pub mod mailing_filter_service;
 
-// <<< CUSTOM
-// END CUSTOM
 
 pub use mailing_ab_test_service::MailingAbTestService;
 pub use mailing_audience_service::MailingAudienceService;
@@ -27,8 +25,6 @@ pub use opt_out_reason_service::OptOutReasonService;
 pub use mailing_service::MailingService;
 pub use mailing_trace_service::MailingTraceService;
 pub use mailing_filter_service::MailingFilterService;
-// <<< CUSTOM
-// END CUSTOM
 
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

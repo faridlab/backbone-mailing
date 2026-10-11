@@ -20,7 +20,6 @@ pub use backbone_core::{AndSpecification, OrSpecification, NotSpecification};
 //   let spec = ActiveSpec.and(VerifiedSpec);
 //   if spec.is_satisfied_by(&entity) { ... }
 
-// <<< CUSTOM
 // Add predicate structs here. Example:
 //
 // pub struct ActiveOptOutReasonSpec;
@@ -30,4 +29,3 @@ pub use backbone_core::{AndSpecification, OrSpecification, NotSpecification};
 //         todo!()
 //     }
 // }
-// END CUSTOM

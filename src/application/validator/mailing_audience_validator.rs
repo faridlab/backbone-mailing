@@ -16,9 +16,5 @@ pub type MailingAudienceValidator = EntityValidator<MailingAudience>;
 pub fn mailing_audience_validator() -> MailingAudienceValidator {
     EntityValidator::new()
         .rule(RequiredString::new("name", |e: &MailingAudience| &e.name))
-    // <<< CUSTOM RULES
-    // END CUSTOM RULES
 }
 
-// <<< CUSTOM
-// END CUSTOM

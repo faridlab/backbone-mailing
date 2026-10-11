@@ -121,3 +121,4 @@ async fn test_mailing_filter_api() {
         panic!("{} tests failed", failed.len());
     }
 }
+

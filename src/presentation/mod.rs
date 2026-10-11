@@ -5,5 +5,3 @@
 pub mod dto;
 pub mod http;
 
-// <<< CUSTOM
-// END CUSTOM

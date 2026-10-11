@@ -308,7 +308,7 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingContactDto> for MailingContact {
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to MailingContact here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

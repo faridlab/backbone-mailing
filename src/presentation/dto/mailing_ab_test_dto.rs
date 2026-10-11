@@ -299,7 +299,7 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingAbTestDto> for MailingAbTest {
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to MailingAbTest here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

@@ -10,6 +10,4 @@
 // CUSTOM SERVICES
 // ============================================================================
 
-// <<< CUSTOM SERVICES START >>>
 // Add custom public services here
-// <<< CUSTOM SERVICES END >>>

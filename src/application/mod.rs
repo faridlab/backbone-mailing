@@ -16,5 +16,3 @@ pub mod validator;
 
 // Re-exports
 pub use service::*;
-// <<< CUSTOM
-// END CUSTOM

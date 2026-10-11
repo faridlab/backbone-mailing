@@ -252,7 +252,7 @@ impl backbone_core::ApplyUpdateDto<UpdateOptOutReasonDto> for OptOutReason {
 // Custom DTOs
 // =============================================================================
 
-// <<< CUSTOM DTOs
 // Add custom DTOs specific to OptOutReason here.
 // This section will be preserved during regeneration.
 // >>> END CUSTOM DTOs
+

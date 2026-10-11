@@ -187,3 +187,4 @@ pub fn create_protected_mailing_subscription_routes<A: AuthMiddleware + Send + S
             }
         }))
 }
+

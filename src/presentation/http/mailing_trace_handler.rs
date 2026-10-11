@@ -16,7 +16,6 @@ use chrono::{DateTime, Utc};
 use backbone_core::http::{ApiResponse, BackboneCrudHandler};
 
 // Auth integration (optional)
-#[cfg(feature = "auth")]
 use backbone_auth::middleware::AuthContext;
 #[cfg(feature = "auth")]
 use backbone_auth::AuthMiddleware;
@@ -199,7 +198,7 @@ pub fn create_protected_mailing_trace_routes<A: AuthMiddleware + Send + Sync + '
 pub async fn set_process_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
-    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+    auth: Option<axum::Extension<AuthContext>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
 
@@ -210,8 +209,10 @@ pub async fn set_process_transition(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
     };
 
-    // Check permission (if auth enabled)
-    #[cfg(feature = "auth")]
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingTraceResponseDto>::error("A transition needs an authenticated caller")));
+    };
     {
         let allowed_roles = TraceStatusTransition::SetProcess.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_process");
@@ -255,7 +256,7 @@ pub async fn set_process_transition(
 pub async fn set_pending_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
-    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+    auth: Option<axum::Extension<AuthContext>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
 
@@ -266,8 +267,10 @@ pub async fn set_pending_transition(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
     };
 
-    // Check permission (if auth enabled)
-    #[cfg(feature = "auth")]
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingTraceResponseDto>::error("A transition needs an authenticated caller")));
+    };
     {
         let allowed_roles = TraceStatusTransition::SetPending.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_pending");
@@ -311,7 +314,7 @@ pub async fn set_pending_transition(
 pub async fn set_sent_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
-    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+    auth: Option<axum::Extension<AuthContext>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
 
@@ -322,8 +325,10 @@ pub async fn set_sent_transition(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
     };
 
-    // Check permission (if auth enabled)
-    #[cfg(feature = "auth")]
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingTraceResponseDto>::error("A transition needs an authenticated caller")));
+    };
     {
         let allowed_roles = TraceStatusTransition::SetSent.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_sent");
@@ -367,7 +372,7 @@ pub async fn set_sent_transition(
 pub async fn set_opened_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
-    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+    auth: Option<axum::Extension<AuthContext>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
 
@@ -378,8 +383,10 @@ pub async fn set_opened_transition(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
     };
 
-    // Check permission (if auth enabled)
-    #[cfg(feature = "auth")]
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingTraceResponseDto>::error("A transition needs an authenticated caller")));
+    };
     {
         let allowed_roles = TraceStatusTransition::SetOpened.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_opened");
@@ -423,7 +430,7 @@ pub async fn set_opened_transition(
 pub async fn set_replied_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
-    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+    auth: Option<axum::Extension<AuthContext>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
 
@@ -434,8 +441,10 @@ pub async fn set_replied_transition(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
     };
 
-    // Check permission (if auth enabled)
-    #[cfg(feature = "auth")]
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingTraceResponseDto>::error("A transition needs an authenticated caller")));
+    };
     {
         let allowed_roles = TraceStatusTransition::SetReplied.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_replied");
@@ -479,7 +488,7 @@ pub async fn set_replied_transition(
 pub async fn set_bounced_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
-    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+    auth: Option<axum::Extension<AuthContext>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
 
@@ -490,8 +499,10 @@ pub async fn set_bounced_transition(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
     };
 
-    // Check permission (if auth enabled)
-    #[cfg(feature = "auth")]
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingTraceResponseDto>::error("A transition needs an authenticated caller")));
+    };
     {
         let allowed_roles = TraceStatusTransition::SetBounced.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_bounced");
@@ -535,7 +546,7 @@ pub async fn set_bounced_transition(
 pub async fn set_bounced_sms_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
-    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+    auth: Option<axum::Extension<AuthContext>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
 
@@ -546,8 +557,10 @@ pub async fn set_bounced_sms_transition(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
     };
 
-    // Check permission (if auth enabled)
-    #[cfg(feature = "auth")]
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingTraceResponseDto>::error("A transition needs an authenticated caller")));
+    };
     {
         let allowed_roles = TraceStatusTransition::SetBouncedSms.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_bounced_sms");
@@ -591,7 +604,7 @@ pub async fn set_bounced_sms_transition(
 pub async fn set_failed_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
-    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+    auth: Option<axum::Extension<AuthContext>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
 
@@ -602,8 +615,10 @@ pub async fn set_failed_transition(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
     };
 
-    // Check permission (if auth enabled)
-    #[cfg(feature = "auth")]
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingTraceResponseDto>::error("A transition needs an authenticated caller")));
+    };
     {
         let allowed_roles = TraceStatusTransition::SetFailed.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_failed");
@@ -647,7 +662,7 @@ pub async fn set_failed_transition(
 pub async fn set_canceled_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingTraceService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
-    #[cfg(feature = "auth")] axum::Extension(auth): axum::Extension<AuthContext>,
+    auth: Option<axum::Extension<AuthContext>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
 
@@ -658,8 +673,10 @@ pub async fn set_canceled_transition(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingTraceResponseDto>::error(e.to_string()))),
     };
 
-    // Check permission (if auth enabled)
-    #[cfg(feature = "auth")]
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingTraceResponseDto>::error("A transition needs an authenticated caller")));
+    };
     {
         let allowed_roles = TraceStatusTransition::SetCanceled.allowed_roles();
         let has_specific_perm = auth.permissions.iter().any(|p| p == "mailing_trace:transition:set_canceled");

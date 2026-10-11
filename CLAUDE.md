@@ -29,12 +29,12 @@ metaphor lint check
 - (optional) gRPC service + Protobuf
 - (optional) OpenAPI spec
 
-**Regeneration preserves only code inside `// <<< CUSTOM ... // END CUSTOM` blocks.** Everything outside those markers is overwritten.
+**Regeneration writes every generated file whole.** Hand code never goes in a generated file: it lives in a `<name>.ext.rs` extension file beside it (ADR-0031), and `metaphor schema doctor` fails on a generated file that differs from fresh output.
 
 ## Rules
 
-- **MUST** edit `schema/models/*.model.yaml` first for any entity change. Never hand-edit generated files outside CUSTOM markers.
-- **MUST** put custom logic inside `// <<< CUSTOM` / `// END CUSTOM` blocks, or in a sibling `*_custom.rs` file (e.g. `account_service_custom.rs`) which is never overwritten.
+- **MUST** edit `schema/models/*.model.yaml` first for any entity change. **NEVER** hand-edit a generated file.
+- **MUST** put hand code in extension files: `<name>.ext.rs` beside the generated file (extra `impl` blocks, an extension trait for a generated service, a validator's `extend`), `mod.ext.rs` for a directory's hand-written module declarations and re-exports, and `lib.ext.rs` for the module's own state, builder options and build steps. A wholly hand-written file (e.g. `account_service_custom.rs`) is listed under `user_owned` and declared in its directory's `mod.ext.rs`.
 - **MUST** define services as type aliases: `pub type AccountService = GenericCrudService<Account, CreateAccountDto, UpdateAccountDto, AccountRepository>`. Don't hand-roll `impl`.
 - **MUST** define repositories as thin newtypes: `pub struct AccountRepository(GenericCrudRepository<Account, PgPool>)`. Add custom methods only when `GenericCrudRepository` cannot express them.
 - **MUST** register every service in the `{Domain}Module` builder.
@@ -52,7 +52,7 @@ src/
 ├── module.rs                             # Module struct + builder
 ├── domain/
 │   ├── entity/
-│   │   ├── <entity>.rs                   # generated; customize via CUSTOM markers
+│   │   ├── <entity>.rs                   # generated; extend in <entity>.ext.rs
 │   │   └── mod.rs
 │   └── repositories/                     # trait definitions (ports)
 ├── application/
@@ -111,7 +111,7 @@ Cargo.toml                                # feature flags: events, grpc, openapi
 ## Common tasks
 
 - "Add a new entity `Vendor`" → add `schema/models/vendor.model.yaml` → `metaphor make entity vendor` → migration/entity/service/handler/route wired automatically → register `vendor_service` in `module.rs`.
-- "Add a custom business rule" → put it in `application/service/<entity>_service_custom.rs`, or inside `// <<< CUSTOM` markers in the generated service.
+- "Add a custom business rule" → put it in `application/service/<entity>_service_custom.rs` (declared in `mod.ext.rs`), or in `<entity>_service.ext.rs` beside the generated service.
 - "Add a non-CRUD endpoint" → add a handler fn in `presentation/http/`, register in `routes/mod.rs` (outside `BackboneCrudHandler` composition).
 - "Change a column" → edit schema YAML, `metaphor migration generate <change>`, regenerate.
 
@@ -134,7 +134,7 @@ Cargo.toml                                # feature flags: events, grpc, openapi
 
 ## Anti-patterns
 
-- Editing generated code outside CUSTOM markers (silently overwritten on next regen).
+- Editing a generated file at all (regeneration overwrites it, and `schema doctor` fails on it).
 - Adding `main.rs` / binary target to a module (wrong project type).
 - Hand-rolled axum CRUD routes (always use `BackboneCrudHandler`).
 - Skipping schema YAML and writing entity + migration + handler by hand (breaks regen).

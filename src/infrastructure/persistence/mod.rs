@@ -15,9 +15,6 @@ mod mailing_filter_repository;
 
 // Custom persistence modules
 // <<< CUSTOM
-pub mod mailing_send_repository;
-pub mod subscription_repository;
-pub mod trace_repository;
 // END CUSTOM
 
 // Re-exports
@@ -39,10 +36,7 @@ pub use backbone_orm::repository::{
 
 // Re-export custom persistence types
 // <<< CUSTOM
-pub use mailing_send_repository::{
-    ClaimedMailing, CompiledDomain, DomainField, DomainOp, DomainTerm, MailingSendRepository,
-    ResolvedRecipient,
-};
-pub use subscription_repository::{AudienceRecipient, SubscriptionRepository, SubscriptionRow};
-pub use trace_repository::{MailingTraceCounts, TraceRepository, TraceRow};
 // END CUSTOM
+
+// This directory's extension (hand-written; ADR-0031).
+include!("mod.ext.rs");

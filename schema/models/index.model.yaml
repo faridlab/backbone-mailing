@@ -28,6 +28,8 @@ config:
   audit: true
   default_timestamps: true
   generators:
+    # Hand code lives in <name>.ext.rs beside the generated file (ADR-0031).
+    extensions: true
     # Off-by-default targets this module's released API still carries; it keeps
     # them until its next breaking release.
     opt_in: [seeder, specification]

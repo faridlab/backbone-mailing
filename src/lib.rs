@@ -27,6 +27,16 @@ pub mod exports;
 // <<< CUSTOM MODULES
 // END CUSTOM
 
+// The module's extension (hand-written; ADR-0031).
+#[path = "lib.ext.rs"]
+mod lib_ext;
+pub use lib_ext::*;
+/// This crate's module and builder under fixed names, for the extension's `impl` blocks.
+#[allow(dead_code)]
+pub(crate) type ThisModule = MailingModule;
+#[allow(dead_code)]
+pub(crate) type ThisModuleBuilder = MailingModuleBuilder;
+
 // Re-exports for convenience - Domain entities
 pub use domain::entity::*;
 
@@ -74,11 +84,45 @@ pub struct MailingModule {
     pub(crate) mailing_service: Arc<MailingService>,
     pub(crate) mailing_trace_service: Arc<MailingTraceService>,
     pub(crate) mailing_filter_service: Arc<MailingFilterService>,
+    /// The module's extension state (`lib.ext.rs`); its fields read through `Deref`.
+    pub(crate) ext: ModuleExt,
     // <<< CUSTOM FIELDS
-    pub(crate) trace_clicks: crate::application::service::trace_click_ports::TraceClickSlot,
-    pub(crate) trace_route_service:
-        std::sync::Arc<crate::application::service::trace_route_service::TraceRouteService>,
     // END CUSTOM
+}
+
+impl std::ops::Deref for MailingModule {
+    type Target = ModuleExt;
+    fn deref(&self) -> &Self::Target {
+        &self.ext
+    }
+}
+
+impl std::ops::DerefMut for MailingModule {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ext
+    }
+}
+
+/// What the extension's `build` hook receives from the generated build (ADR-0031).
+#[allow(dead_code)]
+pub(crate) struct ModuleParts<'a> {
+    pub(crate) db_pool: &'a PgPool,
+    pub(crate) mailing_ab_test_service: &'a Arc<MailingAbTestService>,
+    pub(crate) mailing_ab_test_repository: &'a Arc<MailingAbTestRepository>,
+    pub(crate) mailing_audience_service: &'a Arc<MailingAudienceService>,
+    pub(crate) mailing_audience_repository: &'a Arc<MailingAudienceRepository>,
+    pub(crate) mailing_contact_service: &'a Arc<MailingContactService>,
+    pub(crate) mailing_contact_repository: &'a Arc<MailingContactRepository>,
+    pub(crate) mailing_subscription_service: &'a Arc<MailingSubscriptionService>,
+    pub(crate) mailing_subscription_repository: &'a Arc<MailingSubscriptionRepository>,
+    pub(crate) opt_out_reason_service: &'a Arc<OptOutReasonService>,
+    pub(crate) opt_out_reason_repository: &'a Arc<OptOutReasonRepository>,
+    pub(crate) mailing_service: &'a Arc<MailingService>,
+    pub(crate) mailing_repository: &'a Arc<MailingRepository>,
+    pub(crate) mailing_trace_service: &'a Arc<MailingTraceService>,
+    pub(crate) mailing_trace_repository: &'a Arc<MailingTraceRepository>,
+    pub(crate) mailing_filter_service: &'a Arc<MailingFilterService>,
+    pub(crate) mailing_filter_repository: &'a Arc<MailingFilterRepository>,
 }
 
 impl MailingModule {
@@ -160,34 +204,29 @@ impl MailingModule {
     }
 
     // <<< CUSTOM METHODS
-    /// Compose the short-link click seam for the public trace-route family
-    /// (deny-by-default until called — the PhoneBookPort shape): the ONE
-    /// registered implementation answers code attribution + click minting
-    /// by wrapping the short-link module's public seams.
-    pub fn set_trace_click_port(
-        &self,
-        port: std::sync::Arc<dyn crate::application::service::trace_click_ports::TraceClickPort>,
-    ) {
-        self.trace_clicks.install(port);
-    }
-
-    /// The public `/r/:code/m/:trace` trace-route family (click + open
-    /// pixel + unsubscribe): a BARE capability mount throttled 120/min per
-    /// code — merge at the site ROOT, next to the short-link module's own
-    /// `/r/:code` group (distinct path shapes; no shadowing).
-    pub fn public_trace_routes(&self) -> Router {
-        crate::presentation::http::trace_routes::public_composer(
-            self.trace_route_service.clone(),
-        )
-    }
     // END CUSTOM
 }
 
 /// Builder for MailingModule
 pub struct MailingModuleBuilder {
     db_pool: Option<PgPool>,
+    /// The builder's extension state (`lib.ext.rs`); its fields read through `Deref`.
+    ext: ModuleBuilderExt,
     // <<< CUSTOM BUILDER FIELDS
     // END CUSTOM
+}
+
+impl std::ops::Deref for MailingModuleBuilder {
+    type Target = ModuleBuilderExt;
+    fn deref(&self) -> &Self::Target {
+        &self.ext
+    }
+}
+
+impl std::ops::DerefMut for MailingModuleBuilder {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ext
+    }
 }
 
 impl MailingModuleBuilder {
@@ -195,6 +234,7 @@ impl MailingModuleBuilder {
     pub fn new() -> Self {
         Self {
             db_pool: None,
+            ext: Default::default(),
             // <<< CUSTOM BUILDER DEFAULTS
             // END CUSTOM
         }
@@ -247,15 +287,28 @@ impl MailingModuleBuilder {
         let mailing_filter_service = Arc::new(MailingFilterService::with_repository(mailing_filter_repository.clone()));
 
         // <<< CUSTOM
-        let trace_clicks =
-            crate::application::service::trace_click_ports::TraceClickSlot::default();
-        let trace_route_service = std::sync::Arc::new(
-            crate::application::service::trace_route_service::TraceRouteService::new(
-                db_pool.clone(),
-                trace_clicks.clone(),
-            ),
-        );
         // END CUSTOM
+
+        // The extension builds its own state from what the generated build made.
+        let ext = self.ext.build(&ModuleParts {
+            db_pool: &db_pool,
+            mailing_ab_test_service: &mailing_ab_test_service,
+            mailing_ab_test_repository: &mailing_ab_test_repository,
+            mailing_audience_service: &mailing_audience_service,
+            mailing_audience_repository: &mailing_audience_repository,
+            mailing_contact_service: &mailing_contact_service,
+            mailing_contact_repository: &mailing_contact_repository,
+            mailing_subscription_service: &mailing_subscription_service,
+            mailing_subscription_repository: &mailing_subscription_repository,
+            opt_out_reason_service: &opt_out_reason_service,
+            opt_out_reason_repository: &opt_out_reason_repository,
+            mailing_service: &mailing_service,
+            mailing_repository: &mailing_repository,
+            mailing_trace_service: &mailing_trace_service,
+            mailing_trace_repository: &mailing_trace_repository,
+            mailing_filter_service: &mailing_filter_service,
+            mailing_filter_repository: &mailing_filter_repository,
+        })?;
 
         Ok(MailingModule {
             mailing_ab_test_service,
@@ -266,9 +319,8 @@ impl MailingModuleBuilder {
             mailing_service,
             mailing_trace_service,
             mailing_filter_service,
+            ext,
             // <<< CUSTOM
-            trace_clicks,
-            trace_route_service,
             // END CUSTOM
         })
     }

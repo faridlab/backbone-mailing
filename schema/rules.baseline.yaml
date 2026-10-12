@@ -1,0 +1,15 @@
+# The rule ratchet (schema doctor): these counts may only go down. Regenerate with
+# `metaphor schema rules . --update-baseline` after enforcing a rule.
+unenforced: 8
+warnings: 1
+machines_without_verbs: 0
+untested_rule_ids: 7
+unenforced_rules:
+- 'mailing.hook.yaml: ab_testing_pc_bounds'
+- 'mailing.hook.yaml: campaign_cleared_while_ab_testing_refused'
+- 'mailing.hook.yaml: domain_parses_or_refuses'
+- 'mailing.hook.yaml: email_from_required_for_mail'
+- 'mailing.hook.yaml: list_archive_guard'
+- 'mailing.hook.yaml: subscription_unique_contact_list'
+- 'mailing.hook.yaml: trace_recipient_anchor_required'
+- 'mailing.hook.yaml: trace_unique_mailing_recipient'

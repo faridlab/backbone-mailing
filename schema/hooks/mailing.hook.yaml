@@ -42,62 +42,79 @@ rules:
 
   - id: R-M1
     name: ab_testing_pc_bounds
+    entity: Mailing
     when: create, update mailing
     assert: "ab_testing_pc BETWEEN 0 AND 100 (G-MM1 kept — the percentage must be a valid percent)"
     error_code: ab_percentage_out_of_range
+    enforced_by: "migrations/20260426220012_mailing_hardening_constraints.up.sql::chk_mailings_ab_testing_pc"
     enforcement: db
+    justification: "The named CHECK holds the bounds on every path; create_mailing does not range-check, so an out-of-range value answers 500 mailing_db_error, and ab_percentage_out_of_range is never produced."
     # The strict 0..100 CHECK is installed by the hand-written hardening
     # migration (the generic non-negative attribute cannot express the band).
   - id: R-M2
     name: email_from_required_for_mail
+    entity: Mailing
     when: create, update mailing
     assert: "email_from IS NOT NULL OR mailing_type <> 'mail' (G-MM2 kept — the sender guard upstream enforced at the DB, fires on raw SQL)"
     error_code: email_from_required
     enforcement: db
+    justification: "PARTLY: chk_mailings_email_from_for_mail and the column NOT NULL refuse a missing sender, but an empty string passes both, create_mailing checks only for an @ and update_mailing not at all, the NOT NULL also forces a sender on SMS against the rule text, and email_from_required is never produced."
     # Installed by the hand-written hardening migration so the CHECK survives
     # raw SQL exactly as upstream's did (the future SMS channel is exempt).
   - id: R-M3
     name: trace_recipient_anchor_required
+    entity: MailingTrace
     when: create trace
     assert: "recipient_id IS NOT NULL (G-MM3/MMM-11 kept — traces are ALWAYS polymorphic, never orphan)"
     error_code: trace_recipient_required
     enforcement: db
+    justification: "PARTLY: recipient_id is an unnamed inline NOT NULL and mint_trace takes a non-optional id, so no trace is minted without one, but nothing named can be claimed, traces carry no foreign key so an orphan is not refused, and trace_recipient_required is never produced."
     # The @required column constraint IS the guard (NOT NULL fires on raw SQL).
   - id: R-M4
     name: subscription_unique_contact_list
+    entity: MailingSubscription
     when: create, update subscription
     assert: "UNIQUE(contact_id, mailing_audience_id) among live rows (G-MM4/MMM-13 kept — the upstream composite unique; upserts converge instead of duplicating)"
     error_code: duplicate_subscription
+    enforced_by: "migrations/20260426220004_create_mailing_subscription_table.up.sql::idx_mailing_subscriptions_contact_id_mailing_audience_id, src/infrastructure/persistence/subscription_repository.rs::subscribe"
     enforcement: db
+    justification: "The partial unique holds one live subscription per contact and list; subscribe merges into the existing row instead of refusing, so duplicate_subscription is never produced."
   - id: R-M5
     name: trace_unique_mailing_recipient
+    entity: MailingTrace
     when: mint trace
     assert: "UNIQUE(mailing_id, recipient_id) among live non-canceled rows — the MINT FENCE upstream lacks: under the send claim's SKIP LOCKED even a lock regression mints at most one live trace per recipient per mailing; the loser's INSERT fails loudly and is logged, never silently duplicated. Canceled suppression traces sit outside the unique so re-targeting can mint fresh."
     error_code: duplicate_live_trace
+    enforced_by: "migrations/20260426220007_create_mailing_trace_table.up.sql::idx_mailing_traces_mailing_id_recipient_id, src/infrastructure/persistence/trace_repository.rs::mint_trace_fenced"
     enforcement: db
+    justification: "The partial unique holds one live non-cancelled trace per mailing and recipient; the fenced mint skips a conflict with a warning rather than failing, cancel traces sit outside it, retry_failed reopens it for bounced recipients and commits even when it refuses, and duplicate_live_trace is never produced."
   - id: R-M6
     name: domain_parses_or_refuses
+    entity: Mailing
     when: create, update mailing or filter; send
     assert: "the declarative domain DSL parses through the typed parser — Result<CompiledDomain, DomainInvalid>. Malformed input is a typed 422 at create/update; AT SEND the mailing is parked (state stays sending, error recorded on the row, zero recipients touched, zero mail rows minted) — NEVER a silent zero-recipient send (MMB-6 closed)"
     error_code: domain_invalid
+    enforced_by: "src/application/service/mailing_write_service.rs::parse_domain, src/infrastructure/persistence/mailing_send_repository.rs::park_mailing"
     enforcement: service
-    justification: 'The parser is code over a typed json column; no row-level CHECK can express whether that json parses.'
+    justification: "Create and update parse the domain first and refuse it as domain_invalid; the send sweep parks an unparseable stored domain. Filter domains are never parsed, but filters have no write path in serpa; a parked mailing is re-claimed on every sweep."
   - id: R-M7
     name: list_archive_guard
+    entity: MailingAudience
     when: update list
     assert: "archiving (active=false) is refused while any mailing with state != done targets the audience (G-MM7 kept — cross-table, so the verb enforces)"
     error_code: list_in_use
     enforcement: service
-    justification: "Cross-table guard (mailings referencing the list) — not expressible as a row-level CHECK."
+    justification: "PARTLY: archive_audience refuses a list cited by a live mailing, but it soft-deletes where the rule says archive, its citation probe misses lists named inside an in or not-in clause, the read is not locked against a mailing created meanwhile, it answers audience_in_use rather than list_in_use, and serpa mounts no route that calls it."
   - id: R-M8
     name: campaign_cleared_while_ab_testing_refused
+    entity: Mailing
     when: update mailing
     assert: "clearing campaign_id while ab_testing_enabled is refused (G-MM9 kept — an A/B mailing without its campaign would orphan the campaign-keyed dedup and the test row)"
     error_code: campaign_required_for_ab_testing
     enforcement: service
-    justification: "Conditional cross-field + cross-row guard (the ab test row and the seen-list both key off the campaign)."
+    justification: "PARTLY: update_draft leaves campaign_id out of its SET list so the update verb cannot clear it, but nothing refuses: create_mailing accepts A/B testing with no campaign and any test id, no foreign key binds the test, the mounted generic A/B test writes can rewrite or delete the test row, and campaign_required_for_ab_testing is never produced."
 
-triggers: []
+# triggers: []   (not read by the generator in a list-format hook file)
 # (none — upstream's create/write side-effect ladder (cron arming via ORM
 #  writes, attachment re-parenting, inline-image conversion) does not port:
 #  arming is the launch verb's staged event, and rendering is host-side.

@@ -68,11 +68,11 @@ impl backbone_core::write_guard::WriteGuard<Mailing> for MailingRowRules {
         }
         // `subject_max_length` (@max(255) on Mailing.subject)
         if (create || (update && r::changed(old.as_ref(), row, &["subject"]))) && !r::holds(&r::le(r::length(r::field(row, "subject")), r::Val::Num(255.0_f64))) {
-            shadow.push(Violation::new("subject", "max_length", "subject must be at most 255 characters").with_param("max", 255_i64));
+            refuse.push(Violation::new("subject", "max_length", "subject must be at most 255 characters").with_param("max", 255_i64));
         }
         // `preview_max_length` (@max(255) on Mailing.preview)
         if (create || (update && r::changed(old.as_ref(), row, &["preview"]))) && !r::holds(&r::le(r::length(r::field(row, "preview")), r::Val::Num(255.0_f64))) {
-            shadow.push(Violation::new("preview", "max_length", "preview must be at most 255 characters").with_param("max", 255_i64));
+            refuse.push(Violation::new("preview", "max_length", "preview must be at most 255 characters").with_param("max", 255_i64));
         }
         // `body_html_required` (@required on Mailing.body_html)
         if (create || (update && r::changed(old.as_ref(), row, &["body_html"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "body_html")), r::not(r::is_empty(r::trim(r::field(row, "body_html")))))) {
@@ -84,11 +84,11 @@ impl backbone_core::write_guard::WriteGuard<Mailing> for MailingRowRules {
         }
         // `email_from_max_length` (@max(255) on Mailing.email_from)
         if (create || (update && r::changed(old.as_ref(), row, &["email_from"]))) && !r::holds(&r::le(r::length(r::field(row, "email_from")), r::Val::Num(255.0_f64))) {
-            shadow.push(Violation::new("email_from", "max_length", "email_from must be at most 255 characters").with_param("max", 255_i64));
+            refuse.push(Violation::new("email_from", "max_length", "email_from must be at most 255 characters").with_param("max", 255_i64));
         }
         // `reply_to_max_length` (@max(255) on Mailing.reply_to)
         if (create || (update && r::changed(old.as_ref(), row, &["reply_to"]))) && !r::holds(&r::le(r::length(r::field(row, "reply_to")), r::Val::Num(255.0_f64))) {
-            shadow.push(Violation::new("reply_to", "max_length", "reply_to must be at most 255 characters").with_param("max", 255_i64));
+            refuse.push(Violation::new("reply_to", "max_length", "reply_to must be at most 255 characters").with_param("max", 255_i64));
         }
         GuardOutcome { refuse, shadow }
     }

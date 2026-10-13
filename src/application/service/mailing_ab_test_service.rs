@@ -56,7 +56,7 @@ impl backbone_core::write_guard::WriteGuard<MailingAbTest> for MailingAbTestRowR
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `campaign_id_required` (@required on MailingAbTest.campaign_id)
         if (create || (update && r::changed(old.as_ref(), row, &["campaign_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "campaign_id")), r::not(r::is_empty(r::trim(r::field(row, "campaign_id")))))) {
@@ -68,7 +68,7 @@ impl backbone_core::write_guard::WriteGuard<MailingAbTest> for MailingAbTestRowR
         }
         // `sampling_seed_max_length` (@max(64) on MailingAbTest.sampling_seed)
         if (create || (update && r::changed(old.as_ref(), row, &["sampling_seed"]))) && !r::holds(&r::le(r::length(r::field(row, "sampling_seed")), r::Val::Num(64.0_f64))) {
-            shadow.push(Violation::new("sampling_seed", "max_length", "sampling_seed must be at most 64 characters").with_param("max", 64_i64));
+            refuse.push(Violation::new("sampling_seed", "max_length", "sampling_seed must be at most 64 characters").with_param("max", 64_i64));
         }
         GuardOutcome { refuse, shadow }
     }

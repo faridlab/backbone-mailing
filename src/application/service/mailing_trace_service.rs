@@ -32,9 +32,10 @@ pub type MailingTraceService = GenericCrudService<
     MailingTraceRepository,
 >;
 
-/// The row rules the schema declares for MailingTrace, checked against the row a create or
-/// update would store. The generated build attaches it to [`MailingTraceService`]. Every rule
-/// runs in shadow: a break is logged under `backbone::write_guard` and the write goes ahead.
+/// The rules the schema declares for MailingTrace, checked against the row a create or update
+/// would store. The generated build attaches it to [`MailingTraceService`]. A refusing rule's
+/// break answers 422; a rule in shadow is logged under `backbone::write_guard` and the
+/// write goes ahead.
 pub struct MailingTraceRowRules;
 
 #[async_trait::async_trait]
@@ -56,11 +57,48 @@ impl backbone_core::write_guard::WriteGuard<MailingTrace> for MailingTraceRowRul
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
         let mut shadow = Vec::new();
+        let mut refuse = Vec::new();
         // `trace_status` belongs to a state machine: only its verbs move it
         if update && ctx.transition.is_none() && r::changed(old.as_ref(), row, &["trace_status"]) {
             shadow.push(Violation::new("trace_status", "state_field_verbs_only", "the state field moves only through its verbs"));
         }
-        GuardOutcome { refuse: Vec::new(), shadow }
+        // `mailing_id_required` (@required on MailingTrace.mailing_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["mailing_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "mailing_id")), r::not(r::is_empty(r::trim(r::field(row, "mailing_id")))))) {
+            refuse.push(Violation::new("mailing_id", "required", "mailing_id is required"));
+        }
+        // `recipient_model_required` (@required on MailingTrace.recipient_model)
+        if (create || (update && r::changed(old.as_ref(), row, &["recipient_model"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "recipient_model")), r::not(r::is_empty(r::trim(r::field(row, "recipient_model")))))) {
+            refuse.push(Violation::new("recipient_model", "required", "recipient_model is required"));
+        }
+        // `recipient_model_max_length` (@max(64) on MailingTrace.recipient_model)
+        if (create || (update && r::changed(old.as_ref(), row, &["recipient_model"]))) && !r::holds(&r::le(r::length(r::field(row, "recipient_model")), r::Val::Num(64.0_f64))) {
+            shadow.push(Violation::new("recipient_model", "max_length", "recipient_model must be at most 64 characters").with_param("max", 64_i64));
+        }
+        // `recipient_id_required` (@required on MailingTrace.recipient_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["recipient_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "recipient_id")), r::not(r::is_empty(r::trim(r::field(row, "recipient_id")))))) {
+            refuse.push(Violation::new("recipient_id", "required", "recipient_id is required"));
+        }
+        // `recipient_email_required` (@required on MailingTrace.recipient_email)
+        if (create || (update && r::changed(old.as_ref(), row, &["recipient_email"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "recipient_email")), r::not(r::is_empty(r::trim(r::field(row, "recipient_email")))))) {
+            refuse.push(Violation::new("recipient_email", "required", "recipient_email is required"));
+        }
+        // `recipient_email_max_length` (@max(255) on MailingTrace.recipient_email)
+        if (create || (update && r::changed(old.as_ref(), row, &["recipient_email"]))) && !r::holds(&r::le(r::length(r::field(row, "recipient_email")), r::Val::Num(255.0_f64))) {
+            shadow.push(Violation::new("recipient_email", "max_length", "recipient_email must be at most 255 characters").with_param("max", 255_i64));
+        }
+        // `sms_uuid_max_length` (@max(64) on MailingTrace.sms_uuid)
+        if (create || (update && r::changed(old.as_ref(), row, &["sms_uuid"]))) && !r::holds(&r::le(r::length(r::field(row, "sms_uuid")), r::Val::Num(64.0_f64))) {
+            shadow.push(Violation::new("sms_uuid", "max_length", "sms_uuid must be at most 64 characters").with_param("max", 64_i64));
+        }
+        // `recipient_phone_max_length` (@max(16) on MailingTrace.recipient_phone)
+        if (create || (update && r::changed(old.as_ref(), row, &["recipient_phone"]))) && !r::holds(&r::le(r::length(r::field(row, "recipient_phone")), r::Val::Num(16.0_f64))) {
+            shadow.push(Violation::new("recipient_phone", "max_length", "recipient_phone must be at most 16 characters").with_param("max", 16_i64));
+        }
+        // `message_id_max_length` (@max(255) on MailingTrace.message_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["message_id"]))) && !r::holds(&r::le(r::length(r::field(row, "message_id")), r::Val::Num(255.0_f64))) {
+            shadow.push(Violation::new("message_id", "max_length", "message_id must be at most 255 characters").with_param("max", 255_i64));
+        }
+        GuardOutcome { refuse, shadow }
     }
 }
 

@@ -32,3 +32,41 @@ pub type MailingSubscriptionService = GenericCrudService<
     MailingSubscriptionRepository,
 >;
 
+/// The rules the schema declares for MailingSubscription, checked against the row a create or update
+/// would store. The generated build attaches it to [`MailingSubscriptionService`]. A refusing rule's
+/// break answers 422; a rule in shadow is logged under `backbone::write_guard` and the
+/// write goes ahead.
+pub struct MailingSubscriptionRowRules;
+
+#[async_trait::async_trait]
+impl backbone_core::write_guard::WriteGuard<MailingSubscription> for MailingSubscriptionRowRules {
+    async fn check(
+        &self,
+        ctx: &backbone_core::write_guard::WriteCtx<'_, MailingSubscription>,
+    ) -> backbone_core::write_guard::GuardOutcome {
+        use backbone_core::row_rule as r;
+        use backbone_core::violation::Violation;
+        use backbone_core::write_guard::{GuardOutcome, WriteKind};
+        let (create, update) = (ctx.kind == WriteKind::Create, ctx.kind == WriteKind::Update);
+        let Some(after) = ctx.after.filter(|_| create || update) else {
+            return GuardOutcome::allow();
+        };
+        let Ok(row) = serde_json::to_value(after) else {
+            return GuardOutcome::allow();
+        };
+        let row = &row;
+        let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
+        let shadow = Vec::new();
+        let mut refuse = Vec::new();
+        // `contact_id_required` (@required on MailingSubscription.contact_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["contact_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "contact_id")), r::not(r::is_empty(r::trim(r::field(row, "contact_id")))))) {
+            refuse.push(Violation::new("contact_id", "required", "contact_id is required"));
+        }
+        // `mailing_audience_id_required` (@required on MailingSubscription.mailing_audience_id)
+        if (create || (update && r::changed(old.as_ref(), row, &["mailing_audience_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "mailing_audience_id")), r::not(r::is_empty(r::trim(r::field(row, "mailing_audience_id")))))) {
+            refuse.push(Violation::new("mailing_audience_id", "required", "mailing_audience_id is required"));
+        }
+        GuardOutcome { refuse, shadow }
+    }
+}
+

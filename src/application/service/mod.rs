@@ -25,8 +25,14 @@ pub use opt_out_reason_service::OptOutReasonService;
 pub use mailing_service::MailingService;
 pub use mailing_trace_service::MailingTraceService;
 pub use mailing_filter_service::MailingFilterService;
+pub use mailing_ab_test_service::MailingAbTestRowRules;
+pub use mailing_audience_service::MailingAudienceRowRules;
+pub use mailing_contact_service::MailingContactRowRules;
+pub use mailing_subscription_service::MailingSubscriptionRowRules;
+pub use opt_out_reason_service::OptOutReasonRowRules;
 pub use mailing_service::MailingRowRules;
 pub use mailing_trace_service::MailingTraceRowRules;
+pub use mailing_filter_service::MailingFilterRowRules;
 
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

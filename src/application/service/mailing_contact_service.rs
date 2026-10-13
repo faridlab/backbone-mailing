@@ -32,3 +32,65 @@ pub type MailingContactService = GenericCrudService<
     MailingContactRepository,
 >;
 
+/// The rules the schema declares for MailingContact, checked against the row a create or update
+/// would store. The generated build attaches it to [`MailingContactService`]. A refusing rule's
+/// break answers 422; a rule in shadow is logged under `backbone::write_guard` and the
+/// write goes ahead.
+pub struct MailingContactRowRules;
+
+#[async_trait::async_trait]
+impl backbone_core::write_guard::WriteGuard<MailingContact> for MailingContactRowRules {
+    async fn check(
+        &self,
+        ctx: &backbone_core::write_guard::WriteCtx<'_, MailingContact>,
+    ) -> backbone_core::write_guard::GuardOutcome {
+        use backbone_core::row_rule as r;
+        use backbone_core::violation::Violation;
+        use backbone_core::write_guard::{GuardOutcome, WriteKind};
+        let (create, update) = (ctx.kind == WriteKind::Create, ctx.kind == WriteKind::Update);
+        let Some(after) = ctx.after.filter(|_| create || update) else {
+            return GuardOutcome::allow();
+        };
+        let Ok(row) = serde_json::to_value(after) else {
+            return GuardOutcome::allow();
+        };
+        let row = &row;
+        let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
+        let mut shadow = Vec::new();
+        let mut refuse = Vec::new();
+        // `name_max_length` (@max(120) on MailingContact.name)
+        if (create || (update && r::changed(old.as_ref(), row, &["name"]))) && !r::holds(&r::le(r::length(r::field(row, "name")), r::Val::Num(120.0_f64))) {
+            shadow.push(Violation::new("name", "max_length", "name must be at most 120 characters").with_param("max", 120_i64));
+        }
+        // `first_name_max_length` (@max(120) on MailingContact.first_name)
+        if (create || (update && r::changed(old.as_ref(), row, &["first_name"]))) && !r::holds(&r::le(r::length(r::field(row, "first_name")), r::Val::Num(120.0_f64))) {
+            shadow.push(Violation::new("first_name", "max_length", "first_name must be at most 120 characters").with_param("max", 120_i64));
+        }
+        // `last_name_max_length` (@max(120) on MailingContact.last_name)
+        if (create || (update && r::changed(old.as_ref(), row, &["last_name"]))) && !r::holds(&r::le(r::length(r::field(row, "last_name")), r::Val::Num(120.0_f64))) {
+            shadow.push(Violation::new("last_name", "max_length", "last_name must be at most 120 characters").with_param("max", 120_i64));
+        }
+        // `email_required` (@required on MailingContact.email)
+        if (create || (update && r::changed(old.as_ref(), row, &["email"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "email")), r::not(r::is_empty(r::trim(r::field(row, "email")))))) {
+            refuse.push(Violation::new("email", "required", "email is required"));
+        }
+        // `email_max_length` (@max(255) on MailingContact.email)
+        if (create || (update && r::changed(old.as_ref(), row, &["email"]))) && !r::holds(&r::le(r::length(r::field(row, "email")), r::Val::Num(255.0_f64))) {
+            shadow.push(Violation::new("email", "max_length", "email must be at most 255 characters").with_param("max", 255_i64));
+        }
+        // `company_name_max_length` (@max(120) on MailingContact.company_name)
+        if (create || (update && r::changed(old.as_ref(), row, &["company_name"]))) && !r::holds(&r::le(r::length(r::field(row, "company_name")), r::Val::Num(120.0_f64))) {
+            shadow.push(Violation::new("company_name", "max_length", "company_name must be at most 120 characters").with_param("max", 120_i64));
+        }
+        // `country_code_max_length` (@max(2) on MailingContact.country_code)
+        if (create || (update && r::changed(old.as_ref(), row, &["country_code"]))) && !r::holds(&r::le(r::length(r::field(row, "country_code")), r::Val::Num(2.0_f64))) {
+            shadow.push(Violation::new("country_code", "max_length", "country_code must be at most 2 characters").with_param("max", 2_i64));
+        }
+        // `phone_max_length` (@max(64) on MailingContact.phone)
+        if (create || (update && r::changed(old.as_ref(), row, &["phone"]))) && !r::holds(&r::le(r::length(r::field(row, "phone")), r::Val::Num(64.0_f64))) {
+            shadow.push(Violation::new("phone", "max_length", "phone must be at most 64 characters").with_param("max", 64_i64));
+        }
+        GuardOutcome { refuse, shadow }
+    }
+}
+

@@ -12,7 +12,6 @@
 //! - Workflows (saga/orchestration patterns)
 
 pub mod service;
-pub mod validator;
 
 // Re-exports
 pub use service::*;

@@ -32,9 +32,10 @@ pub type MailingService = GenericCrudService<
     MailingRepository,
 >;
 
-/// The row rules the schema declares for Mailing, checked against the row a create or
-/// update would store. The generated build attaches it to [`MailingService`]. Every rule
-/// runs in shadow: a break is logged under `backbone::write_guard` and the write goes ahead.
+/// The rules the schema declares for Mailing, checked against the row a create or update
+/// would store. The generated build attaches it to [`MailingService`]. A refusing rule's
+/// break answers 422; a rule in shadow is logged under `backbone::write_guard` and the
+/// write goes ahead.
 pub struct MailingRowRules;
 
 #[async_trait::async_trait]
@@ -56,11 +57,40 @@ impl backbone_core::write_guard::WriteGuard<Mailing> for MailingRowRules {
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
         let mut shadow = Vec::new();
+        let mut refuse = Vec::new();
         // `state` belongs to a state machine: only its verbs move it
         if update && ctx.transition.is_none() && r::changed(old.as_ref(), row, &["state"]) {
             shadow.push(Violation::new("state", "state_field_verbs_only", "the state field moves only through its verbs"));
         }
-        GuardOutcome { refuse: Vec::new(), shadow }
+        // `subject_required` (@required on Mailing.subject)
+        if (create || (update && r::changed(old.as_ref(), row, &["subject"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "subject")), r::not(r::is_empty(r::trim(r::field(row, "subject")))))) {
+            refuse.push(Violation::new("subject", "required", "subject is required"));
+        }
+        // `subject_max_length` (@max(255) on Mailing.subject)
+        if (create || (update && r::changed(old.as_ref(), row, &["subject"]))) && !r::holds(&r::le(r::length(r::field(row, "subject")), r::Val::Num(255.0_f64))) {
+            shadow.push(Violation::new("subject", "max_length", "subject must be at most 255 characters").with_param("max", 255_i64));
+        }
+        // `preview_max_length` (@max(255) on Mailing.preview)
+        if (create || (update && r::changed(old.as_ref(), row, &["preview"]))) && !r::holds(&r::le(r::length(r::field(row, "preview")), r::Val::Num(255.0_f64))) {
+            shadow.push(Violation::new("preview", "max_length", "preview must be at most 255 characters").with_param("max", 255_i64));
+        }
+        // `body_html_required` (@required on Mailing.body_html)
+        if (create || (update && r::changed(old.as_ref(), row, &["body_html"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "body_html")), r::not(r::is_empty(r::trim(r::field(row, "body_html")))))) {
+            refuse.push(Violation::new("body_html", "required", "body_html is required"));
+        }
+        // `email_from_required` (@required on Mailing.email_from)
+        if (create || (update && r::changed(old.as_ref(), row, &["email_from"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "email_from")), r::not(r::is_empty(r::trim(r::field(row, "email_from")))))) {
+            refuse.push(Violation::new("email_from", "required", "email_from is required"));
+        }
+        // `email_from_max_length` (@max(255) on Mailing.email_from)
+        if (create || (update && r::changed(old.as_ref(), row, &["email_from"]))) && !r::holds(&r::le(r::length(r::field(row, "email_from")), r::Val::Num(255.0_f64))) {
+            shadow.push(Violation::new("email_from", "max_length", "email_from must be at most 255 characters").with_param("max", 255_i64));
+        }
+        // `reply_to_max_length` (@max(255) on Mailing.reply_to)
+        if (create || (update && r::changed(old.as_ref(), row, &["reply_to"]))) && !r::holds(&r::le(r::length(r::field(row, "reply_to")), r::Val::Num(255.0_f64))) {
+            shadow.push(Violation::new("reply_to", "max_length", "reply_to must be at most 255 characters").with_param("max", 255_i64));
+        }
+        GuardOutcome { refuse, shadow }
     }
 }
 

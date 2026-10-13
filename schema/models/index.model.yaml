@@ -32,7 +32,7 @@ config:
     extensions: true
     # Off-by-default targets this module's released API still carries; it keeps
     # them until its next breaking release.
-    opt_in: [seeder, specification]
+    opt_in: [seeder]
     disabled:
       - graphql
       - grpc

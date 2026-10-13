@@ -54,9 +54,6 @@ pub use application::service::MailingService;
 pub use application::service::MailingTraceService;
 pub use application::service::MailingFilterService;
 
-// Re-exports - Validation
-pub use application::validator::{ValidationError, ValidationResult};
-
 use std::sync::Arc;
 use axum::Router;
 use sqlx::PgPool;
@@ -244,23 +241,23 @@ impl MailingModuleBuilder {
 
         // MailingAbTest service
         let mailing_ab_test_repository = Arc::new(MailingAbTestRepository::new(db_pool.clone()));
-        let mailing_ab_test_service = Arc::new(MailingAbTestService::with_repository(mailing_ab_test_repository.clone()));
+        let mailing_ab_test_service = Arc::new(MailingAbTestService::with_repository(mailing_ab_test_repository.clone()).with_guard(Arc::new(crate::application::service::MailingAbTestRowRules)));
 
         // MailingAudience service
         let mailing_audience_repository = Arc::new(MailingAudienceRepository::new(db_pool.clone()));
-        let mailing_audience_service = Arc::new(MailingAudienceService::with_repository(mailing_audience_repository.clone()));
+        let mailing_audience_service = Arc::new(MailingAudienceService::with_repository(mailing_audience_repository.clone()).with_guard(Arc::new(crate::application::service::MailingAudienceRowRules)));
 
         // MailingContact service
         let mailing_contact_repository = Arc::new(MailingContactRepository::new(db_pool.clone()));
-        let mailing_contact_service = Arc::new(MailingContactService::with_repository(mailing_contact_repository.clone()));
+        let mailing_contact_service = Arc::new(MailingContactService::with_repository(mailing_contact_repository.clone()).with_guard(Arc::new(crate::application::service::MailingContactRowRules)));
 
         // MailingSubscription service
         let mailing_subscription_repository = Arc::new(MailingSubscriptionRepository::new(db_pool.clone()));
-        let mailing_subscription_service = Arc::new(MailingSubscriptionService::with_repository(mailing_subscription_repository.clone()));
+        let mailing_subscription_service = Arc::new(MailingSubscriptionService::with_repository(mailing_subscription_repository.clone()).with_guard(Arc::new(crate::application::service::MailingSubscriptionRowRules)));
 
         // OptOutReason service
         let opt_out_reason_repository = Arc::new(OptOutReasonRepository::new(db_pool.clone()));
-        let opt_out_reason_service = Arc::new(OptOutReasonService::with_repository(opt_out_reason_repository.clone()));
+        let opt_out_reason_service = Arc::new(OptOutReasonService::with_repository(opt_out_reason_repository.clone()).with_guard(Arc::new(crate::application::service::OptOutReasonRowRules)));
 
         // Mailing service
         let mailing_repository = Arc::new(MailingRepository::new(db_pool.clone()));
@@ -272,7 +269,7 @@ impl MailingModuleBuilder {
 
         // MailingFilter service
         let mailing_filter_repository = Arc::new(MailingFilterRepository::new(db_pool.clone()));
-        let mailing_filter_service = Arc::new(MailingFilterService::with_repository(mailing_filter_repository.clone()));
+        let mailing_filter_service = Arc::new(MailingFilterService::with_repository(mailing_filter_repository.clone()).with_guard(Arc::new(crate::application::service::MailingFilterRowRules)));
 
 
         // The extension builds its own state from what the generated build made.

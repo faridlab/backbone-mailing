@@ -381,6 +381,8 @@ pub struct MailingUpsertCommand {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SweepOutcome {
     pub claimed: usize,
+    /// Mailings whose drive failed this sweep, parked with the reason.
+    pub drive_failures: usize,
     pub parked: usize,
     pub completed: usize,
     pub completed_empty: usize,
@@ -431,6 +433,8 @@ pub struct MailingWriteService {
     messages: MessageWriteService,
     queue: MailQueueWriteService,
     sms_pump: SmsDeliveryPumpService,
+    /// Where each mailing's sweep work runs (the composer's fence scope, or as it is).
+    run_scope: Arc<dyn crate::application::service::run_scope::MailingRunScope>,
 }
 
 impl MailingWriteService {
@@ -439,6 +443,7 @@ impl MailingWriteService {
             messages: MessageWriteService::new(pool.clone()),
             queue: MailQueueWriteService::new(pool.clone()),
             sms_pump: SmsDeliveryPumpService::new(pool.clone()),
+            run_scope: crate::application::service::run_scope::unscoped(),
             pool,
             cfg: MailingSendConfig::default(),
             blacklist_cfg: AutoBlacklistConfig::default(),
@@ -452,6 +457,15 @@ impl MailingWriteService {
     }
 
     /// Override the engine shape (tests drive small batches + real pacing).
+    /// Run each mailing's sweep work through the composer's scope seam.
+    pub fn with_run_scope(
+        mut self,
+        scope: Arc<dyn crate::application::service::run_scope::MailingRunScope>,
+    ) -> Self {
+        self.run_scope = scope;
+        self
+    }
+
     pub fn with_send_config(mut self, cfg: MailingSendConfig) -> Self {
         self.cfg = cfg;
         self
@@ -569,6 +583,14 @@ impl MailingWriteService {
                 cmd.email_from
             )));
         }
+        // The database CHECK holds the bounds too; refusing here answers 422 instead of a
+        // database error.
+        if !(0..=100).contains(&cmd.ab_testing_pc) {
+            return Err(MailingWriteError::Invalid(format!(
+                "ab_testing_pc must be 0..=100, not {}",
+                cmd.ab_testing_pc
+            )));
+        }
         let domain = parse_domain(&cmd.mailing_domain_raw)?;
         let target_model = match cmd.target_model.parse::<crate::domain::entity::MailingTargetModel>() {
             Ok(_) => cmd.target_model.clone(),
@@ -585,7 +607,7 @@ impl MailingWriteService {
         // bridge exclusion policy); an authored domain always wins.
         let domain = domain_to_store(&domain, &target_model)?;
         let id = Uuid::new_v4();
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         MailingSendRepository::insert_mailing(
             &mut tx,
             id,
@@ -623,7 +645,7 @@ impl MailingWriteService {
         cmd: &MailingUpsertCommand,
     ) -> Result<(), MailingWriteError> {
         let domain = parse_domain(&cmd.mailing_domain_raw)?;
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let updated = MailingSendRepository::update_draft(
             &mut tx,
             id,
@@ -674,7 +696,7 @@ impl MailingWriteService {
                 )))
             }
         };
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         // SMS mailings must carry a body at launch — refuse with the typed
         // error before any queue effect (the DB CHECK stays as the raw-SQL
         // backstop for paths that bypass this verb).
@@ -717,7 +739,7 @@ impl MailingWriteService {
         }
         // The arming event carries the campaign attribution when present.
         let campaign_id = {
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             let cid = MailingSendRepository::mailing_campaign_id(&mut tx, id).await?;
             tx.commit().await?;
             cid
@@ -730,7 +752,7 @@ impl MailingWriteService {
     /// The cancel edge: [in_queue, sending, done] → draft, schedule cleared,
     /// traces KEPT (the machine has no canceled state — audit survives).
     pub async fn cancel(&self, id: Uuid) -> Result<(), MailingWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let canceled = MailingSendRepository::cancel_mailing(&mut tx, id).await?;
         tx.commit().await?;
         if !canceled {
@@ -748,7 +770,7 @@ impl MailingWriteService {
     /// send_error park and moves sending → in_queue (guarded on the park
     /// marker, so a normal in-flight sending mailing is untouched).
     pub async fn requeue_after_domain_fix(&self, id: Uuid) -> Result<(), MailingWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let unparked = MailingSendRepository::unpark_mailing(&mut tx, id).await?;
         tx.commit().await?;
         if !unparked {
@@ -767,27 +789,29 @@ impl MailingWriteService {
     /// then re-queue done → in_queue. Zero failed traces is a typed
     /// refusal, never a silent no-op.
     pub async fn retry_failed(&self, id: Uuid) -> Result<u64, MailingWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let failed = MailingSendRepository::count_failed_traces(&mut tx, id).await?;
         if failed == 0 {
             tx.rollback().await?;
             return Err(MailingWriteError::Invalid(format!(
-                "mailing {id} has no failed (error/bounce) traces to retry"
+                "mailing {id} has no failed (error) traces to retry"
             )));
         }
-        let soft_deleted = MailingSendRepository::soft_delete_failed_traces(&mut tx, id, 1000).await?;
-        let requeued = MailingSendRepository::requeue_mailing(&mut tx, id).await?;
-        tx.commit().await?;
-        if !requeued {
+        // The state edge first: a mailing that is not done refuses with nothing touched, so a
+        // refused retry never frees its recipients for a second send.
+        if !MailingSendRepository::requeue_mailing(&mut tx, id).await? {
+            tx.rollback().await?;
             return Err(MailingWriteError::Conflict(format!(
                 "mailing {id} is not done — retry_failed only exits done"
             )));
         }
+        let soft_deleted = MailingSendRepository::soft_delete_failed_traces(&mut tx, id, 1000).await?;
+        tx.commit().await?;
         Ok(soft_deleted)
     }
 
     async fn live_state(&self, id: Uuid) -> Result<Option<String>, MailingWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let row = MailingSendRepository::find_live_state(&mut tx, id).await?;
         tx.commit().await?;
         Ok(row.map(|(_, state, _)| state))
@@ -804,7 +828,7 @@ impl MailingWriteService {
         // (1) claim + (2's parse half) — parse INSIDE the claim transaction:
         // a refusal parks before any send can happen.
         let claims = {
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             let claimed =
                 MailingSendRepository::claim_due_mailings(&mut tx, self.cfg.claim_batch).await?;
             for m in &claimed {
@@ -829,18 +853,39 @@ impl MailingWriteService {
         };
         out.claimed = claims.len();
 
-        // (2..6) drive each claimed mailing.
+        // (2..6) drive each claimed mailing, in its own unit's scope. One mailing that cannot
+        // be driven is parked with the reason and the sweep goes on: a failure returned from
+        // here would skip every later mailing and step of this sweep, on every sweep.
         for mailing in &claims {
             if parked_ids.contains(&mailing.id) {
                 continue;
             }
-            self.drive_mailing(mailing, &mut out).await?;
+            let mut driven: Result<(), MailingWriteError> = Ok(());
+            let opened = self
+                .run_scope
+                .within(mailing.id, Box::pin(async {
+                    driven = self.drive_mailing(mailing, &mut out).await;
+                }))
+                .await;
+            let failure = match (opened, driven) {
+                (Err(scope), _) => Some(format!("the mailing's scope could not be opened: {scope}")),
+                (Ok(()), Err(e)) => Some(e.to_string()),
+                (Ok(()), Ok(())) => None,
+            };
+            if let Some(reason) = failure {
+                tracing::error!(mailing_id = %mailing.id, error = %reason, "mailing drive failed; parked");
+                let mut tx = crate::request_pool::begin(&self.pool).await?;
+                MailingSendRepository::park_mailing(&mut tx, mailing.id, &reason).await?;
+                tx.commit().await?;
+                out.parked += 1;
+                out.drive_failures += 1;
+            }
         }
 
         // (7) reconcile settled SMTP verdicts (global — done mailings' final
         // traces still converge here).
         {
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             let settled = TraceRepository::settled_mails_for_reconcile(&mut tx).await?;
             for (trace_id, state, failure_type) in settled {
                 let moved = match state.as_str() {
@@ -863,7 +908,7 @@ impl MailingWriteService {
 
         // (8) auto-blacklist on the DB clock.
         {
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             out.auto_blacklisted = MailingSendRepository::auto_blacklist_sweep(
                 &mut tx,
                 self.blacklist_cfg.window_weeks,
@@ -918,7 +963,7 @@ impl MailingWriteService {
             if m.sms_walk_done {
                 return Ok(());
             }
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             MailingSendRepository::park_mailing(
                 &mut tx,
                 m.id,
@@ -940,7 +985,7 @@ impl MailingWriteService {
         // window out of the orphan set — repairing it would enqueue twice.
         const REPAIR_GRACE_MINUTES: i32 = 5;
         {
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             let orphans =
                 TraceRepository::outgoing_without_mail(&mut tx, m.id, REPAIR_GRACE_MINUTES)
                     .await?;
@@ -963,7 +1008,7 @@ impl MailingWriteService {
         let domain = parse_domain(&m.mailing_domain)?; // re-pure; claim already vetted
         let recipients = match m.target_model.as_str() {
             "mailing_contact" => {
-                let mut tx = self.pool.begin().await?;
+                let mut tx = crate::request_pool::begin(&self.pool).await?;
                 let r = MailingSendRepository::resolve_contact_recipients(
                     &mut tx,
                     &domain,
@@ -986,7 +1031,7 @@ impl MailingWriteService {
                         ))
                     })?,
                     None => {
-                        let mut tx = self.pool.begin().await?;
+                        let mut tx = crate::request_pool::begin(&self.pool).await?;
                         MailingSendRepository::park_mailing(
                             &mut tx,
                             m.id,
@@ -1003,7 +1048,7 @@ impl MailingWriteService {
                 }
             }
             other => {
-                let mut tx = self.pool.begin().await?;
+                let mut tx = crate::request_pool::begin(&self.pool).await?;
                 MailingSendRepository::park_mailing(
                     &mut tx,
                     m.id,
@@ -1029,7 +1074,7 @@ impl MailingWriteService {
             // complete_empty — the claim's shortcut edge: no traces, no
             // mail rows, sent_date still stamped (the mailing DID run; its
             // audience was empty).
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             let flipped = MailingSendRepository::complete_empty(&mut tx, m.id).await?;
             tx.commit().await?;
             if flipped {
@@ -1042,7 +1087,7 @@ impl MailingWriteService {
         // not ab_testing_enabled: the promoted WINNER COPY (sampling off)
         // also carries the test id, and its audience is exactly the campaign
         // remainder — everyone no variant has sent to yet.
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let disposition = MailingSendRepository::recipient_disposition(
             &mut tx,
             m.id,
@@ -1074,13 +1119,13 @@ impl MailingWriteService {
         let ab_seed = if m.ab_testing_enabled {
             match m.ab_test_id {
                 Some(ab_id) => {
-                    let mut tx = self.pool.begin().await?;
+                    let mut tx = crate::request_pool::begin(&self.pool).await?;
                     let seed = MailingSendRepository::sampling_seed(&mut tx, ab_id).await?;
                     tx.commit().await?;
                     match seed {
                         Some(s) => Some(s),
                         None => {
-                            let mut tx = self.pool.begin().await?;
+                            let mut tx = crate::request_pool::begin(&self.pool).await?;
                             MailingSendRepository::park_mailing(
                                 &mut tx,
                                 m.id,
@@ -1094,7 +1139,7 @@ impl MailingWriteService {
                     }
                 }
                 None => {
-                    let mut tx = self.pool.begin().await?;
+                    let mut tx = crate::request_pool::begin(&self.pool).await?;
                     MailingSendRepository::park_mailing(
                         &mut tx,
                         m.id,
@@ -1155,7 +1200,7 @@ impl MailingWriteService {
         // Visible suppression traces + events (one mint transaction).
         for (r, cause) in &cancel_work {
             let trace_id = Uuid::new_v4();
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             match TraceRepository::mint_trace(
                 &mut tx,
                 trace_id,
@@ -1190,7 +1235,7 @@ impl MailingWriteService {
 
         let mut pacer = Pacer::new(self.cfg.max_enqueues_per_second);
         for batch in work.chunks(self.cfg.mail_enqueue_batch.max(1)) {
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             let mut minted: Vec<(Uuid, &ResolvedRecipient)> = Vec::new();
             for r in batch {
                 let r: &ResolvedRecipient = r;
@@ -1233,7 +1278,7 @@ impl MailingWriteService {
                         // One recipient's enqueue failure never fails the
                         // batch: the trace flips to error with the seam
                         // reason; retry_failed is the operator's re-queue.
-                        let mut tx = self.pool.begin().await?;
+                        let mut tx = crate::request_pool::begin(&self.pool).await?;
                         TraceRepository::set_failed(
                             &mut tx,
                             trace_id,
@@ -1270,14 +1315,14 @@ impl MailingWriteService {
         if remaining > 0 {
             out.still_sending += 1;
         } else if m.mailing_type == "sms" {
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             let marked = MailingSendRepository::mark_sms_walk_complete(&mut tx, m.id).await?;
             tx.commit().await?;
             if marked {
                 out.sms_walks_marked += 1;
             }
         } else {
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             let flipped = MailingSendRepository::complete_mailing(&mut tx, m.id).await?;
             tx.commit().await?;
             if flipped {
@@ -1331,7 +1376,7 @@ impl MailingWriteService {
                 Some(m.id),
             )
             .await?;
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         TraceRepository::attach_mail_id(&mut tx, trace_id, mail_id).await?;
         tx.commit().await?;
         Ok(())
@@ -1344,52 +1389,81 @@ impl MailingWriteService {
     /// never a cross-schema raw read) — an uncomposed seam SKIPS the test
     /// loudly instead of promoting on a fake zero.
     async fn promote_due_ab_tests(&self, out: &mut SweepOutcome) -> Result<(), MailingWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let due = MailingSendRepository::ab_tests_due_for_promotion(&mut tx).await?;
         tx.commit().await?;
         for (ab_test_id, selection) in due {
             if selection == "manual" {
                 continue;
             }
-            let winner = if selection == "sale_invoiced_amount" {
-                match self.rank_variants_by_invoiced_amount(ab_test_id).await {
-                    RankBySeamOutcome::Ranked(winner) => Some(winner),
-                    RankBySeamOutcome::Wait => None,
-                    RankBySeamOutcome::SeamRefused(detail) => {
-                        out.ab_seam_refusals += 1;
-                        tracing::warn!(
-                            ab_test_id = %ab_test_id,
-                            detail = %detail,
-                            "A/B promotion skipped: the invoiced-amount seam refused"
-                        );
-                        continue;
-                    }
+            // The test runs where its variants live: the ranking reads and the promoted copy
+            // land in that unit's scope.
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
+            let anchor = MailingSendRepository::first_variant_of(&mut tx, ab_test_id).await?;
+            tx.commit().await?;
+            let Some(anchor) = anchor else { continue };
+            let mut promoted: Result<(), MailingWriteError> = Ok(());
+            let opened = self
+                .run_scope
+                .within(anchor, Box::pin(async {
+                    promoted = self.promote_one(ab_test_id, &selection, out).await;
+                }))
+                .await;
+            // One test that cannot be promoted waits for the next sweep; the others go on.
+            if let Err(e) = opened {
+                tracing::error!(ab_test_id = %ab_test_id, error = %e, "A/B promotion skipped: scope not opened");
+            } else if let Err(e) = promoted {
+                tracing::error!(ab_test_id = %ab_test_id, error = %e, "A/B promotion failed");
+            }
+        }
+        Ok(())
+    }
+
+    /// Rank one due test's variants and promote the winner.
+    async fn promote_one(
+        &self,
+        ab_test_id: Uuid,
+        selection: &str,
+        out: &mut SweepOutcome,
+    ) -> Result<(), MailingWriteError> {
+        let winner = if selection == "sale_invoiced_amount" {
+            match self.rank_variants_by_invoiced_amount(ab_test_id).await {
+                RankBySeamOutcome::Ranked(winner) => Some(winner),
+                RankBySeamOutcome::Wait => None,
+                RankBySeamOutcome::SeamRefused(detail) => {
+                    out.ab_seam_refusals += 1;
+                    tracing::warn!(
+                        ab_test_id = %ab_test_id,
+                        detail = %detail,
+                        "A/B promotion skipped: the invoiced-amount seam refused"
+                    );
+                    return Ok(());
                 }
-            } else {
-                let mut tx = self.pool.begin().await?;
-                let ranked =
-                    MailingSendRepository::rank_variants_by_metric(&mut tx, ab_test_id, &selection)
-                        .await?;
-                tx.commit().await?;
-                ranked.first().map(|(id, _)| *id)
-            };
-            let Some(winner_mailing_id) = winner else {
-                continue; // no done variant yet — wait for the next sweep
-            };
-            let mut tx = self.pool.begin().await?;
-            let promoted_id = Uuid::new_v4();
-            MailingSendRepository::promote_winner(&mut tx, promoted_id, winner_mailing_id, ab_test_id)
-                .await?;
-            MailingSendRepository::queue_promoted_winner(&mut tx, promoted_id).await?;
-            let stamped =
-                MailingSendRepository::complete_ab_test(&mut tx, ab_test_id, winner_mailing_id)
+            }
+        } else {
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
+            let ranked =
+                MailingSendRepository::rank_variants_by_metric(&mut tx, ab_test_id, selection)
                     .await?;
             tx.commit().await?;
-            if stamped {
-                out.ab_promotions += 1;
-                self.events
-                    .ab_test_winner_promoted(ab_test_id, winner_mailing_id);
-            }
+            ranked.first().map(|(id, _)| *id)
+        };
+        let Some(winner_mailing_id) = winner else {
+            return Ok(()); // no done variant yet — wait for the next sweep
+        };
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
+        let promoted_id = Uuid::new_v4();
+        MailingSendRepository::promote_winner(&mut tx, promoted_id, winner_mailing_id, ab_test_id)
+            .await?;
+        MailingSendRepository::queue_promoted_winner(&mut tx, promoted_id).await?;
+        let stamped =
+            MailingSendRepository::complete_ab_test(&mut tx, ab_test_id, winner_mailing_id)
+                .await?;
+        tx.commit().await?;
+        if stamped {
+            out.ab_promotions += 1;
+            self.events
+                .ab_test_winner_promoted(ab_test_id, winner_mailing_id);
         }
         Ok(())
     }
@@ -1406,7 +1480,7 @@ impl MailingWriteService {
     ) -> RankBySeamOutcome {
         use crate::application::service::sale_invoiced_amount_port::SaleInvoicedAmountPort;
 
-        let mut tx = match self.pool.begin().await {
+        let mut tx = match crate::request_pool::begin(&self.pool).await {
             Ok(tx) => tx,
             Err(e) => return RankBySeamOutcome::SeamRefused(e.to_string()),
         };

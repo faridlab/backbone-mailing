@@ -144,7 +144,7 @@ impl SmsSuppressionService {
         }
 
         if !to_cancel.is_empty() {
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             for recipient in &to_cancel {
                 let trace_id = Uuid::new_v4();
                 // Status 'cancel' at mint — the mail engine's suppression

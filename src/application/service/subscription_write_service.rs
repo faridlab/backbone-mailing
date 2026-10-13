@@ -75,7 +75,7 @@ impl SubscriptionWriteService {
             return Err(SubscriptionWriteError::Invalid("audience name is required".into()));
         }
         let id = Uuid::new_v4();
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         SubscriptionRepository::insert_audience(&mut tx, id, name, is_public).await?;
         tx.commit().await?;
         Ok(id)
@@ -108,7 +108,7 @@ impl SubscriptionWriteService {
                 "email must be an address: {email}"
             )));
         }
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let is_public = SubscriptionRepository::audience_is_public(&mut tx, audience_id)
             .await?
             .unwrap_or(false);
@@ -133,7 +133,7 @@ impl SubscriptionWriteService {
         audience_id: Uuid,
         reason_id: Option<Uuid>,
     ) -> Result<(SubscriptionRow, bool), SubscriptionWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let flipped = SubscriptionRepository::opt_out(&mut tx, contact_id, audience_id, reason_id)
             .await?;
         tx.commit().await?;
@@ -169,38 +169,51 @@ impl SubscriptionWriteService {
         reason_id: Option<Uuid>,
     ) -> Result<(SubscriptionRow, bool), SubscriptionWriteError> {
         const REFUSAL: &str = "no subscription to unsubscribe";
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         SubscriptionRepository::ensure_default_reasons(&mut tx).await?;
-        let contact_id = match SubscriptionRepository::contact_id_by_email(&mut tx, email).await? {
-            Some(id) => id,
-            None => {
-                tx.rollback().await?;
-                tracing::debug!(email = %email, "unsubscribe refused: no such contact");
-                return Err(SubscriptionWriteError::NotFound(REFUSAL.to_string()));
-            }
-        };
+        let contact_ids = SubscriptionRepository::contact_ids_by_email(&mut tx, email).await?;
+        if contact_ids.is_empty() {
+            tx.rollback().await?;
+            tracing::debug!(email = %email, "unsubscribe refused: no such contact");
+            return Err(SubscriptionWriteError::NotFound(REFUSAL.to_string()));
+        }
         let reason = match reason_id {
             Some(r) => Some(r),
             None => SubscriptionRepository::default_reason_id(&mut tx).await?,
         };
-        let flipped = SubscriptionRepository::opt_out(&mut tx, contact_id, audience_id, reason)
-            .await?;
-        if flipped.is_none() {
-            let standing = SubscriptionRepository::find_live(&mut tx, contact_id, audience_id).await?;
-            if standing.is_none() {
+        // Every contact with this address opts out of the audience: an address the reader
+        // asked to stop must stop, whichever of its contact rows a mailing reached it through.
+        let mut flipped = None;
+        let mut standing = None;
+        for contact_id in contact_ids {
+            match SubscriptionRepository::opt_out(&mut tx, contact_id, audience_id, reason).await? {
+                Some(row) => flipped = flipped.or(Some(row)),
+                None => {
+                    if standing.is_none() {
+                        standing = SubscriptionRepository::find_live(&mut tx, contact_id, audience_id).await?;
+                    }
+                }
+            }
+        }
+        match (flipped, standing) {
+            (Some(row), _) => {
+                tx.commit().await?;
+                Ok((row, true))
+            }
+            (None, Some(row)) => {
+                tx.commit().await?;
+                Ok((row, false))
+            }
+            (None, None) => {
                 tx.rollback().await?;
                 tracing::debug!(
                     email = %email,
                     audience_id = %audience_id,
                     "unsubscribe refused: no subscription on this audience"
                 );
-                return Err(SubscriptionWriteError::NotFound(REFUSAL.to_string()));
+                Err(SubscriptionWriteError::NotFound(REFUSAL.to_string()))
             }
-            tx.commit().await?;
-            return Ok((standing.expect("checked above"), false));
         }
-        tx.commit().await?;
-        Ok((flipped.expect("checked above"), true))
     }
 
     /// One live subscription row (the read side).
@@ -209,7 +222,7 @@ impl SubscriptionWriteService {
         contact_id: Uuid,
         audience_id: Uuid,
     ) -> Result<Option<SubscriptionRow>, SubscriptionWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let row = SubscriptionRepository::find_live(&mut tx, contact_id, audience_id).await?;
         tx.commit().await?;
         Ok(row)
@@ -223,7 +236,7 @@ impl SubscriptionWriteService {
         contact_id: Uuid,
         audience_id: Uuid,
     ) -> Result<(), SubscriptionWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let removed = SubscriptionRepository::remove(&mut tx, contact_id, audience_id).await?;
         tx.commit().await?;
         if !removed {
@@ -241,7 +254,7 @@ impl SubscriptionWriteService {
         &self,
         audience_id: Uuid,
     ) -> Result<i64, SubscriptionWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let in_use = SubscriptionRepository::audience_in_use_by_mailings(&mut tx, audience_id)
             .await?;
         if !in_use.is_empty() {

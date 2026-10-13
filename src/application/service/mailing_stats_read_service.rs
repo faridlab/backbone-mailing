@@ -127,7 +127,7 @@ impl MailingStatsReadService {
         &self,
         mailing_ids: &[Uuid],
     ) -> Result<Vec<MailingStats>, MailingStatsError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let rows = TraceRepository::counts_for_mailings(&mut tx, mailing_ids).await?;
         tx.commit().await?;
         Ok(rows.into_iter().map(MailingStats::from).collect())
@@ -153,7 +153,7 @@ impl MailingStatsReadService {
         &self,
         mailing_ids: &[Uuid],
     ) -> Result<Vec<SourceGroupedStats>, MailingStatsError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let rows = TraceRepository::source_grouped_counts(&mut tx, mailing_ids).await?;
         tx.commit().await?;
         Ok(rows

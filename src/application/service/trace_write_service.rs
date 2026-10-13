@@ -64,7 +64,7 @@ impl TraceWriteService {
 
     /// The trace row (live) — the read side the routes echo.
     pub async fn find(&self, trace_id: Uuid) -> Result<Option<TraceRow>, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let row = TraceRepository::find_live(&mut tx, trace_id).await?;
         tx.commit().await?;
         Ok(row)
@@ -75,7 +75,7 @@ impl TraceWriteService {
     /// before dispatch). Mail-channel rows never match: their rank never
     /// leaves outgoing before a transport verdict.
     pub async fn set_process(&self, trace_id: Uuid) -> Result<TraceTransition, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         if TraceRepository::find_live(&mut tx, trace_id).await?.is_none() {
             tx.commit().await?;
             return Ok(TraceTransition::Missing);
@@ -89,7 +89,7 @@ impl TraceWriteService {
     /// the delivery report (displays 'Sent'). A tracker already past
     /// 'process' advances the trace in one compressed step from outgoing.
     pub async fn set_pending(&self, trace_id: Uuid) -> Result<TraceTransition, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         if TraceRepository::find_live(&mut tx, trace_id).await?.is_none() {
             tx.commit().await?;
             return Ok(TraceTransition::Missing);
@@ -117,7 +117,7 @@ impl TraceWriteService {
                 "not an SMS failure code: {failure_type}"
             )));
         }
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         if TraceRepository::find_live(&mut tx, trace_id).await?.is_none() {
             tx.commit().await?;
             return Ok(TraceTransition::Missing);
@@ -137,7 +137,7 @@ impl TraceWriteService {
         trace_id: Uuid,
         sms_uuid: &str,
     ) -> Result<TraceTransition, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let moved = TraceRepository::attach_sms_uuid(&mut tx, trace_id, sms_uuid).await?;
         tx.commit().await?;
         Ok(classify(moved))
@@ -145,7 +145,7 @@ impl TraceWriteService {
 
     /// `set_sent` — the transport's acceptance stamp.
     pub async fn set_sent(&self, trace_id: Uuid) -> Result<TraceTransition, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         if TraceRepository::find_live(&mut tx, trace_id).await?.is_none() {
             tx.commit().await?;
             return Ok(TraceTransition::Missing);
@@ -157,7 +157,7 @@ impl TraceWriteService {
 
     /// `set_opened` — the pixel fact.
     pub async fn set_opened(&self, trace_id: Uuid) -> Result<TraceTransition, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         if TraceRepository::find_live(&mut tx, trace_id).await?.is_none() {
             tx.commit().await?;
             return Ok(TraceTransition::Missing);
@@ -169,7 +169,7 @@ impl TraceWriteService {
 
     /// `set_replied` — the inbound reply fact.
     pub async fn set_replied(&self, trace_id: Uuid) -> Result<TraceTransition, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         if TraceRepository::find_live(&mut tx, trace_id).await?.is_none() {
             tx.commit().await?;
             return Ok(TraceTransition::Missing);
@@ -182,7 +182,7 @@ impl TraceWriteService {
     /// `set_bounced` — stamps failure_type='mail_bounce' (the
     /// auto-blacklist window's fact source).
     pub async fn set_bounced(&self, trace_id: Uuid) -> Result<TraceTransition, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         if TraceRepository::find_live(&mut tx, trace_id).await?.is_none() {
             tx.commit().await?;
             return Ok(TraceTransition::Missing);
@@ -195,7 +195,7 @@ impl TraceWriteService {
     /// `set_clicked` — the click stamp; state moves only via set_opened
     /// (the click route calls both).
     pub async fn set_clicked(&self, trace_id: Uuid) -> Result<TraceTransition, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         if TraceRepository::find_live(&mut tx, trace_id).await?.is_none() {
             tx.commit().await?;
             return Ok(TraceTransition::Missing);
@@ -212,7 +212,7 @@ impl TraceWriteService {
         failure_type: &str,
         failure_reason: Option<&str>,
     ) -> Result<TraceTransition, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let row = TraceRepository::find_live(&mut tx, trace_id).await?;
         if row.is_none() {
             tx.commit().await?;
@@ -230,7 +230,7 @@ impl TraceWriteService {
         trace_id: Uuid,
         failure_type: &str,
     ) -> Result<TraceTransition, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let moved = TraceRepository::set_canceled(&mut tx, trace_id, failure_type).await?;
         tx.commit().await?;
         Ok(classify(moved))
@@ -242,7 +242,7 @@ impl TraceWriteService {
         trace_id: Uuid,
         message_id: &str,
     ) -> Result<TraceTransition, TraceWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let moved = TraceRepository::set_message_id(&mut tx, trace_id, message_id).await?;
         tx.commit().await?;
         Ok(classify(moved))

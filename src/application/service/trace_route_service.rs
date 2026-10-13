@@ -169,7 +169,7 @@ impl TraceRouteService {
         let row = self.route_trace(trace_id).await?;
         self.check_consistency(code, row.campaign_id).await?;
 
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let domain_json = MailingSendRepository::find_live_mailing_domain(&mut tx, row.mailing_id)
             .await?
             .ok_or_else(|| TraceRouteError::Invalid(format!(
@@ -206,7 +206,7 @@ impl TraceRouteService {
         &self,
         trace_id: Uuid,
     ) -> Result<crate::infrastructure::persistence::trace_repository::RouteTraceRow, TraceRouteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let row = TraceRepository::find_route_trace(&mut tx, trace_id).await?;
         tx.commit().await?;
         row.ok_or(TraceRouteError::UnknownTrace)

@@ -292,19 +292,21 @@ impl SubscriptionRepository {
         .await
     }
 
-    /// Find a live contact id by email (the unsubscribe route's seam: it
-    /// arrives with an email, not a contact id).
-    pub async fn contact_id_by_email(
+    /// Every live contact carrying this email, compared case-insensitively (the unsubscribe
+    /// route's seam: it arrives with an email, not a contact id). The contact unique is
+    /// case-sensitive, so one address can be several contacts; an opt-out must reach them all.
+    pub async fn contact_ids_by_email(
         conn: &mut PgConnection,
         email: &str,
-    ) -> Result<Option<Uuid>, sqlx::Error> {
+    ) -> Result<Vec<Uuid>, sqlx::Error> {
         sqlx::query_scalar::<_, Uuid>(
             r#"SELECT id FROM mailing.mailing_contacts
                WHERE lower(email) = lower($1)
-                 AND (metadata->>'deleted_at') IS NULL"#,
+                 AND (metadata->>'deleted_at') IS NULL
+               ORDER BY id"#,
         )
         .bind(email)
-        .fetch_optional(&mut *conn)
+        .fetch_all(&mut *conn)
         .await
     }
 

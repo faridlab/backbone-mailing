@@ -156,7 +156,7 @@ impl SmsDeliveryPumpService {
         // fails the pass loudly, and every verdict that already landed
         // stays landed.
         let verdicts = {
-            let mut conn = self.pool.acquire().await?;
+            let mut conn = crate::request_pool::begin(&self.pool).await?;
             TraceRepository::sms_traces_with_tracker_verdicts(&mut conn, TRACE_BATCH).await?
         };
         for verdict in &verdicts {
@@ -171,12 +171,12 @@ impl SmsDeliveryPumpService {
         // lock-free; the per-candidate transaction re-establishes candidacy
         // under FOR UPDATE before any check or write.
         let candidates = {
-            let mut conn = self.pool.acquire().await?;
+            let mut conn = crate::request_pool::begin(&self.pool).await?;
             MailingSendRepository::sms_done_inference_candidates(&mut conn, CANDIDATE_BATCH).await?
         };
         out.candidates = candidates.len();
         for mailing_id in candidates {
-            let mut tx = self.pool.begin().await?;
+            let mut tx = crate::request_pool::begin(&self.pool).await?;
             let Some(locked) =
                 MailingSendRepository::lock_mailing_for_done(&mut tx, mailing_id).await?
             else {
@@ -207,7 +207,7 @@ impl SmsDeliveryPumpService {
     /// own small transaction. True when the row advanced; false when the
     /// rank guard matched zero rows (the idempotent skip).
     async fn apply_verdict(&self, verdict: &SmsTraceVerdict) -> Result<bool, sqlx::Error> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let moved = match map_verdict(&verdict.tracker_state, verdict.failure_type.as_deref()) {
             VerdictAction::Skip => {
                 tx.commit().await?;

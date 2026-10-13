@@ -1132,15 +1132,22 @@ async fn event_registration_refuses_overset_domains_not_coerces() {
         serde_json::json!([{"field": "first_name", "op": "=", "value": "Nope"}]);
     let id = engine.create_mailing(&whitelisted).await.expect("create");
     engine.launch(id, "immediate", None).await.expect("launch");
-    let err = engine.send_queue_sweep().await.expect_err("sweep refuses");
+    // The refusal parks the mailing with its reason; the sweep itself goes on, so one bad
+    // mailing never holds back the others.
+    let outcome = engine.send_queue_sweep().await.expect("sweep runs");
+    assert_eq!(outcome.drive_failures, 1, "the refusing mailing is counted");
+    let err: String = sqlx::query_scalar(
+        "SELECT metadata->>'send_error' FROM mailing.mailings WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_one(&db.pool)
+    .await
+    .expect("parked reason");
     assert!(
-        err.to_string().contains("event_registration resolver failed"),
-        "the sweep error names the refusing target: {err}"
+        err.contains("event_registration resolver failed"),
+        "the parked reason names the refusing target: {err}"
     );
-    assert!(
-        err.to_string().contains("first_name"),
-        "the refusal names the unbindable field: {err}"
-    );
+    assert!(err.contains("first_name"), "the refusal names the unbindable field: {err}");
     let traces: i64 =
         sqlx::query_scalar("SELECT count(*) FROM mailing.mailing_traces WHERE mailing_id = $1")
             .bind(id)

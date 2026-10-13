@@ -11,6 +11,11 @@
 # Declared BEFORE any file lands (the regen-safety contract).
 
 user_owned:
+  # The composer's request pool and org scope, resolved per request (ADR-0029 pool law): every
+  # service opens its transactions through it, so a tenant mount reaches its own database and a
+  # fenced composition has its scope bound on each hand-written statement.
+  - "src/request_pool.rs"
+
   # Hand-authored validated write paths (services orchestrate, repositories
   # hold SQL — the module rule): the mailing lifecycle + send engine verbs,
   # the trace set_* verbs, and the grouped-query stats read service.
@@ -24,6 +29,9 @@ user_owned:
   - "src/application/service/mailing_stats_read_service.rs"
   - "src/application/service/subscription_write_service.rs"
   - "src/application/service/ab_test_write_service.rs"
+  # The per-mailing scope seam the send sweep drives each mailing through, so a composer that
+  # fences the mailing tables runs every mailing in its own unit's scope.
+  - "src/application/service/run_scope.rs"
   # SMS-channel STOP surface (the mass_mailing_sms overlay's STOP legs): the
   # inbound-reply + code-bearing blacklist-add verbs with the Tier B STOP-code
   # floor (MSM-B-10 — the 3-char upstream code shape is refused), and the

@@ -48,7 +48,7 @@ rules:
     error_code: ab_percentage_out_of_range
     enforced_by: "migrations/20260426220012_mailing_hardening_constraints.up.sql::chk_mailings_ab_testing_pc"
     enforcement: db
-    justification: "The named CHECK holds the bounds on every path; create_mailing does not range-check, so an out-of-range value answers 500 mailing_db_error, and ab_percentage_out_of_range is never produced."
+    justification: "The named CHECK holds the bounds on every path, and create_mailing and bind_variant refuse an out-of-range value first as a 422; the code they answer is invalid_input, never ab_percentage_out_of_range."
     # The strict 0..100 CHECK is installed by the hand-written hardening
     # migration (the generic non-negative attribute cannot express the band).
   - id: R-M2
@@ -87,7 +87,7 @@ rules:
     error_code: duplicate_live_trace
     enforced_by: "migrations/20260426220007_create_mailing_trace_table.up.sql::idx_mailing_traces_mailing_id_recipient_id, src/infrastructure/persistence/trace_repository.rs::mint_trace_fenced"
     enforcement: db
-    justification: "The partial unique holds one live non-cancelled trace per mailing and recipient; the fenced mint skips a conflict with a warning rather than failing, cancel traces sit outside it, retry_failed reopens it for bounced recipients and commits even when it refuses, and duplicate_live_trace is never produced."
+    justification: "The partial unique holds one live non-cancelled trace per mailing and recipient; the fenced mint skips a conflict with a warning rather than failing, cancel traces sit outside it, and retry_failed reopens it only for error traces of a done mailing; duplicate_live_trace is never produced."
   - id: R-M6
     name: domain_parses_or_refuses
     entity: Mailing

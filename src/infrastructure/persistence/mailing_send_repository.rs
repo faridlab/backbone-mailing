@@ -149,6 +149,9 @@ impl MailingSendRepository {
                FROM mailing.mailings
                WHERE state IN ('in_queue', 'sending')
                  AND (metadata->>'deleted_at') IS NULL
+                 -- A parked mailing waits for its fix and requeue; claiming it again would
+                 -- only refuse again, every sweep.
+                 AND NOT (metadata ? 'send_error')
                  AND (schedule_date IS NULL OR schedule_date <= now())
                ORDER BY (state = 'in_queue') DESC,
                         (metadata->>'created_at') NULLS LAST, id
@@ -157,6 +160,21 @@ impl MailingSendRepository {
         )
         .bind(limit)
         .fetch_all(&mut *conn)
+        .await
+    }
+
+    /// One live variant mailing of an A/B test — where the test lives.
+    pub async fn first_variant_of(
+        conn: &mut PgConnection,
+        ab_test_id: Uuid,
+    ) -> Result<Option<Uuid>, sqlx::Error> {
+        sqlx::query_scalar::<_, Uuid>(
+            r#"SELECT id FROM mailing.mailings
+               WHERE ab_test_id = $1 AND (metadata->>'deleted_at') IS NULL
+               ORDER BY id LIMIT 1"#,
+        )
+        .bind(ab_test_id)
+        .fetch_optional(&mut *conn)
         .await
     }
 
@@ -755,7 +773,7 @@ impl MailingSendRepository {
 
     // ── retry_failed's trace cleanup ──────────────────────────────────────────
 
-    /// Soft-delete error/bounce traces in batches of `batch` — soft delete
+    /// Soft-delete error traces (a bounced address is never re-sent) in batches of `batch` — soft delete
     /// OPENS the mint fence (a re-send mints a fresh live trace) while the
     /// audit trail stays queryable. Returns total soft-deleted.
     pub async fn soft_delete_failed_traces(
@@ -772,7 +790,7 @@ impl MailingSendRepository {
                    WHERE id IN (
                        SELECT id FROM mailing.mailing_traces
                        WHERE mailing_id = $1
-                         AND trace_status IN ('error', 'bounce')
+                         AND trace_status = 'error'
                          AND (metadata->>'deleted_at') IS NULL
                        ORDER BY id
                        LIMIT $2
@@ -791,7 +809,7 @@ impl MailingSendRepository {
         Ok(total)
     }
 
-    /// Count of live failed (error/bounce) traces — `retry_failed`'s typed
+    /// Count of live failed (error) traces — `retry_failed`'s typed
     /// refusal probe when zero.
     pub async fn count_failed_traces(
         conn: &mut PgConnection,
@@ -800,7 +818,7 @@ impl MailingSendRepository {
         sqlx::query_scalar::<_, i64>(
             r#"SELECT count(*) FROM mailing.mailing_traces
                WHERE mailing_id = $1
-                 AND trace_status IN ('error', 'bounce')
+                 AND trace_status = 'error'
                  AND (metadata->>'deleted_at') IS NULL"#,
         )
         .bind(mailing_id)

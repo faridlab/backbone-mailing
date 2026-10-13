@@ -135,7 +135,7 @@ impl AbTestWriteService {
         let sampling_seed: String = seed_bytes.iter().map(|b| format!("{b:02x}")).collect();
 
         let id = Uuid::new_v4();
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         match MailingSendRepository::insert_ab_test(
             &mut tx,
             id,
@@ -175,14 +175,14 @@ impl AbTestWriteService {
                 "ab_testing_pc must be 0..=100, not {pc}"
             )));
         }
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let bound = MailingSendRepository::bind_variant(&mut tx, mailing_id, ab_test_id, pc).await?;
         tx.commit().await?;
         match bound {
             Some(_) => Ok(()),
             None => {
                 let state = {
-                    let mut tx = self.pool.begin().await?;
+                    let mut tx = crate::request_pool::begin(&self.pool).await?;
                     let s = MailingSendRepository::find_live_state(&mut tx, mailing_id).await?;
                     tx.commit().await?;
                     s.map(|(_, state, _)| state)
@@ -199,7 +199,7 @@ impl AbTestWriteService {
 
     /// One test's view (variants included).
     pub async fn view(&self, ab_test_id: Uuid) -> Result<AbTestView, AbTestWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let row = MailingSendRepository::find_ab_test(&mut tx, ab_test_id).await?;
         let variants = MailingSendRepository::variant_mailing_ids(&mut tx, ab_test_id).await?;
         tx.commit().await?;
@@ -249,7 +249,7 @@ impl AbTestWriteService {
                 )))
             }
         };
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let stamped =
             MailingSendRepository::set_ab_test_sms_selection(&mut tx, ab_test_id, parsed).await?;
         tx.commit().await?;
@@ -266,7 +266,7 @@ impl AbTestWriteService {
     }
 
     async fn live_test_exists(&self, ab_test_id: Uuid) -> Option<bool> {
-        let mut tx = self.pool.begin().await.ok()?;
+        let mut tx = crate::request_pool::begin(&self.pool).await.ok()?;
         let row = MailingSendRepository::find_ab_test(&mut tx, ab_test_id).await.ok()?;
         tx.commit().await.ok();
         Some(row.is_some())
@@ -284,7 +284,7 @@ impl AbTestWriteService {
         &self,
         ab_test_id: Uuid,
     ) -> Result<MixedChannelComparison, AbTestWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let row = MailingSendRepository::find_ab_test(&mut tx, ab_test_id).await?;
         let Some((_, _, winner_selection, winner_selection_sms, ..)) = row else {
             tx.rollback().await?;
@@ -329,7 +329,7 @@ impl AbTestWriteService {
         ab_test_id: Uuid,
         winner_mailing_id: Uuid,
     ) -> Result<Option<Uuid>, AbTestWriteError> {
-        let mut tx = self.pool.begin().await?;
+        let mut tx = crate::request_pool::begin(&self.pool).await?;
         let test = MailingSendRepository::find_ab_test(&mut tx, ab_test_id).await?;
         let Some((_, _, selection, _, _, completed, _, _)) = test else {
             tx.rollback().await?;

@@ -5,6 +5,7 @@ pub mod ab_test_write_service;
 pub mod event_registration_target_port;
 pub mod mailing_stats_read_service;
 pub mod mailing_write_service;
+pub mod run_scope;
 pub mod sale_invoiced_amount_port;
 pub mod sms_delivery_pump_service;
 pub mod sms_stop_service;
@@ -51,3 +52,4 @@ pub use sms_suppression_service::{
     SuppressionOutcome, SMS_BLACKLIST_FAILURE_TYPE,
 };
 pub use sms_targeting_service::{SmsTargetingReport, TargetPhoneResolver};
+pub use run_scope::{MailingRunScope, ScopedWork, Unscoped};

@@ -377,6 +377,9 @@ impl backbone_orm::EntityRepoMeta for MailingTrace {
     fn search_fields() -> &'static [&'static str] {
         &["recipient_model", "recipient_email"]
     }
+    fn relations() -> &'static [(&'static str, &'static str, &'static str)] {
+        &[("mailing", "mailings", "mailingId")]
+    }
 }
 
 /// Builder for MailingTrace entity

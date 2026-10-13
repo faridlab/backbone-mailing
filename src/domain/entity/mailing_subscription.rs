@@ -228,6 +228,9 @@ impl backbone_orm::EntityRepoMeta for MailingSubscription {
     fn search_fields() -> &'static [&'static str] {
         &[]
     }
+    fn relations() -> &'static [(&'static str, &'static str, &'static str)] {
+        &[("contact", "mailing_contacts", "contactId"), ("mailingAudience", "mailing_audiences", "mailingAudienceId"), ("optOutReason", "mailing_opt_out_reasons", "optOutReasonId")]
+    }
 }
 
 /// Builder for MailingSubscription entity

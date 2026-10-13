@@ -247,6 +247,9 @@ impl backbone_orm::EntityRepoMeta for MailingAbTest {
     fn search_fields() -> &'static [&'static str] {
         &["sampling_seed"]
     }
+    fn relations() -> &'static [(&'static str, &'static str, &'static str)] {
+        &[("winnerMailing", "mailings", "winnerMailingId")]
+    }
 }
 
 /// Builder for MailingAbTest entity

@@ -397,6 +397,9 @@ impl backbone_orm::EntityRepoMeta for Mailing {
     fn search_fields() -> &'static [&'static str] {
         &["subject", "body_html", "email_from"]
     }
+    fn relations() -> &'static [(&'static str, &'static str, &'static str)] {
+        &[("abTest", "mailing_ab_tests", "abTestId")]
+    }
 }
 
 /// Builder for Mailing entity

@@ -56,11 +56,11 @@ impl backbone_core::write_guard::WriteGuard<Mailing> for MailingRowRules {
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `state` belongs to a state machine: only its verbs move it
         if update && ctx.transition.is_none() && r::changed(old.as_ref(), row, &["state"]) {
-            shadow.push(Violation::new("state", "state_field_verbs_only", "the state field moves only through its verbs"));
+            refuse.push(Violation::new("state", "state_field_verbs_only", "the state field moves only through its verbs"));
         }
         // `subject_required` (@required on Mailing.subject)
         if (create || (update && r::changed(old.as_ref(), row, &["subject"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "subject")), r::not(r::is_empty(r::trim(r::field(row, "subject")))))) {

@@ -221,13 +221,9 @@ pub async fn launch_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing:transition:launch");
-        let has_update_perm = granted("mailing:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for launch transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "launch", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:launch");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("launch needs mailing:transition:launch")));
         }
     }
 
@@ -284,13 +280,9 @@ pub async fn pickup_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing:transition:pickup");
-        let has_update_perm = granted("mailing:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for pickup transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "pickup", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:pickup");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("pickup needs mailing:transition:pickup")));
         }
     }
 
@@ -347,13 +339,9 @@ pub async fn complete_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing:transition:complete");
-        let has_update_perm = granted("mailing:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for complete transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "complete", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:complete");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("complete needs mailing:transition:complete")));
         }
     }
 
@@ -410,13 +398,9 @@ pub async fn complete_empty_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing:transition:complete_empty");
-        let has_update_perm = granted("mailing:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for complete_empty transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "complete_empty", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:complete_empty");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("complete_empty needs mailing:transition:complete_empty")));
         }
     }
 
@@ -473,13 +457,9 @@ pub async fn cancel_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing:transition:cancel");
-        let has_update_perm = granted("mailing:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for cancel transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "cancel", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:cancel");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("cancel needs mailing:transition:cancel")));
         }
     }
 
@@ -498,6 +478,65 @@ pub async fn cancel_transition(
     fields.insert("state".to_string(), serde_json::Value::String("draft".to_string()));
 
     match backbone_core::write_guard::as_transition("cancel", service.partial_update(&id, fields)).await {
+        Ok(Some(updated)) => {
+            let response: MailingResponseDto = updated.into();
+            (StatusCode::OK, Json(ApiResponse::ok(response)))
+        }
+        Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+    }
+}
+
+/// Execute unpark transition on a Mailing.
+///
+/// POST /mailings/:id/transitions/unpark
+pub async fn unpark_transition(
+    axum::extract::State(service): axum::extract::State<Arc<MailingService>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    auth: Option<axum::Extension<AuthContext>>,
+) -> impl axum::response::IntoResponse {
+    use axum::{http::StatusCode, Json};
+
+    // Get current entity
+    let entity = match service.get_by_id(&id).await {
+        Ok(Some(e)) => e,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+    };
+
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingResponseDto>::error("A transition needs an authenticated caller")));
+    };
+    {
+        let allowed_roles = MailingStateTransition::Unpark.allowed_roles();
+        let granted = |required: &str| auth.permissions.iter().any(|p| {
+            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
+            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
+                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
+        });
+        let has_specific_perm = granted("mailing:transition:unpark");
+        let _ = &allowed_roles;
+        if !has_specific_perm {
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("unpark needs mailing:transition:unpark")));
+        }
+    }
+
+    // Create state machine from entity's actual status and validate transition
+    let current_state: MailingStateState = match entity.state.to_string().parse() {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::CONFLICT, Json(ApiResponse::<MailingResponseDto>::error("The stored state is not a state of this machine"))),
+    };
+    let sm = MailingStateStateMachine::from_state(current_state);
+    if !sm.can_transition(MailingStateTransition::Unpark) {
+        return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
+    }
+
+    // Apply transition via partial update
+    let mut fields: HashMap<String, serde_json::Value> = HashMap::new();
+    fields.insert("state".to_string(), serde_json::Value::String("in_queue".to_string()));
+
+    match backbone_core::write_guard::as_transition("unpark", service.partial_update(&id, fields)).await {
         Ok(Some(updated)) => {
             let response: MailingResponseDto = updated.into();
             (StatusCode::OK, Json(ApiResponse::ok(response)))
@@ -536,13 +575,9 @@ pub async fn retry_failed_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing:transition:retry_failed");
-        let has_update_perm = granted("mailing:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("Insufficient permissions for retry_failed transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "Mailing", verb = "retry_failed", code = "transition_by_update_permission", "a transition granted only by mailing:update, running in shadow; it needs mailing:transition:retry_failed");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("retry_failed needs mailing:transition:retry_failed")));
         }
     }
 
@@ -580,6 +615,7 @@ pub fn create_mailing_transition_routes(service: Arc<MailingService>) -> Router 
         .route("/mailings/:id/transitions/complete", post(complete_transition))
         .route("/mailings/:id/transitions/complete_empty", post(complete_empty_transition))
         .route("/mailings/:id/transitions/cancel", post(cancel_transition))
+        .route("/mailings/:id/transitions/unpark", post(unpark_transition))
         .route("/mailings/:id/transitions/retry_failed", post(retry_failed_transition))
         .with_state(service)
 }

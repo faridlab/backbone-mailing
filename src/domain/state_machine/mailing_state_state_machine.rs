@@ -84,6 +84,8 @@ pub enum MailingStateTransition {
     CompleteEmpty,
     /// in_queue, sending, done -> draft
     Cancel,
+    /// sending -> in_queue
+    Unpark,
     /// done -> in_queue
     RetryFailed,
 }
@@ -96,6 +98,7 @@ impl std::fmt::Display for MailingStateTransition {
             Self::Complete => write!(f, "complete"),
             Self::CompleteEmpty => write!(f, "complete_empty"),
             Self::Cancel => write!(f, "cancel"),
+            Self::Unpark => write!(f, "unpark"),
             Self::RetryFailed => write!(f, "retry_failed"),
         }
     }
@@ -111,6 +114,7 @@ impl FromStr for MailingStateTransition {
             "complete" => Ok(Self::Complete),
             "complete_empty" => Ok(Self::CompleteEmpty),
             "cancel" => Ok(Self::Cancel),
+            "unpark" => Ok(Self::Unpark),
             "retry_failed" => Ok(Self::RetryFailed),
             _ => Err(StateMachineError::InvalidTransition(s.to_string())),
         }
@@ -126,6 +130,7 @@ impl MailingStateTransition {
             Self::Complete => MailingStateState::Done,
             Self::CompleteEmpty => MailingStateState::Done,
             Self::Cancel => MailingStateState::Draft,
+            Self::Unpark => MailingStateState::InQueue,
             Self::RetryFailed => MailingStateState::InQueue,
         }
     }
@@ -138,6 +143,7 @@ impl MailingStateTransition {
             Self::Complete,
             Self::CompleteEmpty,
             Self::Cancel,
+            Self::Unpark,
             Self::RetryFailed,
         ]
     }
@@ -150,6 +156,7 @@ impl MailingStateTransition {
             Self::Complete => &[],
             Self::CompleteEmpty => &[],
             Self::Cancel => &[],
+            Self::Unpark => &[],
             Self::RetryFailed => &[],
         }
     }
@@ -191,6 +198,7 @@ impl MailingStateStateMachine {
             (MailingStateState::InQueue, MailingStateTransition::Cancel) => true,
             (MailingStateState::Sending, MailingStateTransition::Cancel) => true,
             (MailingStateState::Done, MailingStateTransition::Cancel) => true,
+            (MailingStateState::Sending, MailingStateTransition::Unpark) => true,
             (MailingStateState::Done, MailingStateTransition::RetryFailed) => true,
             _ => false,
         }

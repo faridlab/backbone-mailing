@@ -51,6 +51,11 @@ states:
       from: [in_queue, sending, done]
       to: draft
       message: "Back to draft — clears schedule_date and resets schedule_type='immediate'; traces are KEPT for audit (there is no canceled state value)"
+    unpark:
+      # the send cron parks a failing mailing in sending with a send_error; clearing it re-queues
+      from: sending
+      to: in_queue
+      message: "A send_error park cleared after the domain fix — the mailing re-enters the queue"
     retry_failed:
       from: done
       to: in_queue

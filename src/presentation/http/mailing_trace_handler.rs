@@ -221,13 +221,9 @@ pub async fn set_process_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing_trace:transition:set_process");
-        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_process transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_process", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_process");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("set_process needs mailing_trace:transition:set_process")));
         }
     }
 
@@ -284,13 +280,9 @@ pub async fn set_pending_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing_trace:transition:set_pending");
-        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_pending transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_pending", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_pending");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("set_pending needs mailing_trace:transition:set_pending")));
         }
     }
 
@@ -347,13 +339,9 @@ pub async fn set_sent_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing_trace:transition:set_sent");
-        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_sent transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_sent", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_sent");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("set_sent needs mailing_trace:transition:set_sent")));
         }
     }
 
@@ -410,13 +398,9 @@ pub async fn set_opened_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing_trace:transition:set_opened");
-        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_opened transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_opened", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_opened");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("set_opened needs mailing_trace:transition:set_opened")));
         }
     }
 
@@ -473,13 +457,9 @@ pub async fn set_replied_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing_trace:transition:set_replied");
-        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_replied transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_replied", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_replied");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("set_replied needs mailing_trace:transition:set_replied")));
         }
     }
 
@@ -536,13 +516,9 @@ pub async fn set_bounced_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing_trace:transition:set_bounced");
-        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_bounced transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_bounced", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_bounced");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("set_bounced needs mailing_trace:transition:set_bounced")));
         }
     }
 
@@ -599,13 +575,9 @@ pub async fn set_bounced_sms_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing_trace:transition:set_bounced_sms");
-        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_bounced_sms transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_bounced_sms", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_bounced_sms");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("set_bounced_sms needs mailing_trace:transition:set_bounced_sms")));
         }
     }
 
@@ -662,13 +634,9 @@ pub async fn set_failed_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing_trace:transition:set_failed");
-        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_failed transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_failed", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_failed");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("set_failed needs mailing_trace:transition:set_failed")));
         }
     }
 
@@ -725,13 +693,9 @@ pub async fn set_canceled_transition(
                 && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
         });
         let has_specific_perm = granted("mailing_trace:transition:set_canceled");
-        let has_update_perm = granted("mailing_trace:update");
         let _ = &allowed_roles;
         if !has_specific_perm {
-            if !has_update_perm {
-                return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("Insufficient permissions for set_canceled transition")));
-            }
-            tracing::warn!(target: "backbone::write_guard", entity = "MailingTrace", verb = "set_canceled", code = "transition_by_update_permission", "a transition granted only by mailing_trace:update, running in shadow; it needs mailing_trace:transition:set_canceled");
+            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingTraceResponseDto>::error("set_canceled needs mailing_trace:transition:set_canceled")));
         }
     }
 

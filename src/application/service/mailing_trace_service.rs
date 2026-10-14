@@ -56,11 +56,11 @@ impl backbone_core::write_guard::WriteGuard<MailingTrace> for MailingTraceRowRul
         };
         let row = &row;
         let old = ctx.before.and_then(|b| serde_json::to_value(b).ok());
-        let mut shadow = Vec::new();
+        let shadow = Vec::new();
         let mut refuse = Vec::new();
         // `trace_status` belongs to a state machine: only its verbs move it
         if update && ctx.transition.is_none() && r::changed(old.as_ref(), row, &["trace_status"]) {
-            shadow.push(Violation::new("trace_status", "state_field_verbs_only", "the state field moves only through its verbs"));
+            refuse.push(Violation::new("trace_status", "state_field_verbs_only", "the state field moves only through its verbs"));
         }
         // `mailing_id_required` (@required on MailingTrace.mailing_id)
         if (create || (update && r::changed(old.as_ref(), row, &["mailing_id"]))) && !r::holds(&r::and(r::is_not_null(r::field(row, "mailing_id")), r::not(r::is_empty(r::trim(r::field(row, "mailing_id")))))) {

@@ -953,9 +953,9 @@ dependencies = [
 
 [[package]]
 name = "backbone-mail"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9831eb7a664d53018d864cd6d5cee5ff40c2b50541f3a19eb4fbbf365baaab7"
+checksum = "094fe4cddf4fd4ece5ff60fc1f53c93045ca46235ed02a4ceb95f5f56380026a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -996,7 +996,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-mailing"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "async-trait",

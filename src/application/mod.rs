@@ -7,9 +7,7 @@
 //! - Queries (CQRS read operations)
 //! - Services (business logic)
 //! - Middleware (Auth & RBAC)
-//! - Triggers (lifecycle hooks)
 //! - Validation (input validation)
-//! - Workflows (saga/orchestration patterns)
 
 pub mod service;
 

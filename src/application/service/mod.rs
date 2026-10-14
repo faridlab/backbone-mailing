@@ -34,5 +34,69 @@ pub use mailing_service::MailingRowRules;
 pub use mailing_trace_service::MailingTraceRowRules;
 pub use mailing_filter_service::MailingFilterRowRules;
 
+/// A `MailingAbTestService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_mailing_ab_test_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::MailingAbTestRepository>,
+) -> MailingAbTestService {
+    MailingAbTestService::with_repository(repository).with_guard(std::sync::Arc::new(MailingAbTestRowRules))
+}
+
+/// A `MailingAudienceService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_mailing_audience_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::MailingAudienceRepository>,
+) -> MailingAudienceService {
+    MailingAudienceService::with_repository(repository).with_guard(std::sync::Arc::new(MailingAudienceRowRules))
+}
+
+/// A `MailingContactService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_mailing_contact_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::MailingContactRepository>,
+) -> MailingContactService {
+    MailingContactService::with_repository(repository).with_guard(std::sync::Arc::new(MailingContactRowRules))
+}
+
+/// A `MailingSubscriptionService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_mailing_subscription_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::MailingSubscriptionRepository>,
+) -> MailingSubscriptionService {
+    MailingSubscriptionService::with_repository(repository).with_guard(std::sync::Arc::new(MailingSubscriptionRowRules))
+}
+
+/// A `OptOutReasonService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_opt_out_reason_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::OptOutReasonRepository>,
+) -> OptOutReasonService {
+    OptOutReasonService::with_repository(repository).with_guard(std::sync::Arc::new(OptOutReasonRowRules))
+}
+
+/// A `MailingService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_mailing_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::MailingRepository>,
+) -> MailingService {
+    MailingService::with_repository(repository).with_guard(std::sync::Arc::new(MailingRowRules))
+}
+
+/// A `MailingTraceService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_mailing_trace_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::MailingTraceRepository>,
+) -> MailingTraceService {
+    MailingTraceService::with_repository(repository).with_guard(std::sync::Arc::new(MailingTraceRowRules))
+}
+
+/// A `MailingFilterService` over `repository` with its write guard attached: the way to build it, so its writes are
+/// served only with the rules the schema declares.
+pub fn build_mailing_filter_service(
+    repository: std::sync::Arc<crate::infrastructure::persistence::MailingFilterRepository>,
+) -> MailingFilterService {
+    MailingFilterService::with_repository(repository).with_guard(std::sync::Arc::new(MailingFilterRowRules))
+}
+
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

@@ -98,6 +98,10 @@ impl backbone_core::write_guard::WriteGuard<MailingTrace> for MailingTraceRowRul
         if (create || (update && r::changed(old.as_ref(), row, &["message_id"]))) && !r::holds(&r::le(r::length(r::field(row, "message_id")), r::Val::Num(255.0_f64))) {
             refuse.push(Violation::new("message_id", "max_length", "message_id must be at most 255 characters").with_param("max", 255_i64));
         }
+        // `trace_recipient_anchor_required` (mailing.hook.yaml:65)
+        if (create) && !r::holds(&r::is_not_null(r::field(row, "recipient_id"))) {
+            refuse.push(Violation::new("recipient_id", "trace_recipient_required", "breaks the rule `trace_recipient_anchor_required`: recipient_id != null"));
+        }
         GuardOutcome { refuse, shadow }
     }
 }

@@ -54,21 +54,23 @@ rules:
   - id: R-M2
     name: email_from_required_for_mail
     entity: Mailing
-    when: create, update mailing
-    assert: "email_from IS NOT NULL OR mailing_type <> 'mail' (G-MM2 kept — the sender guard upstream enforced at the DB, fires on raw SQL)"
+    # G-MM2 kept: the sender guard upstream enforced at the database.
+    when: [create, update]
+    assert: "mailing_type != 'mail' || (email_from != null && email_from.trim().length > 0)"
     error_code: email_from_required
     enforcement: db
-    justification: "PARTLY: chk_mailings_email_from_for_mail and the column NOT NULL refuse a missing sender, but an empty string passes both, create_mailing checks only for an @ and update_mailing not at all, the NOT NULL also forces a sender on SMS against the rule text, and email_from_required is never produced."
+    justification: "Compiled into the generated write guard, so every create and update of a mail-type mailing refuses a missing or blank sender with email_from_required; chk_mailings_email_from_for_mail and the column NOT NULL refuse a missing one at the database too, though they let an empty string through and the NOT NULL also forces a sender on SMS against the rule text."
     # Installed by the hand-written hardening migration so the CHECK survives
     # raw SQL exactly as upstream's did (the future SMS channel is exempt).
   - id: R-M3
     name: trace_recipient_anchor_required
     entity: MailingTrace
-    when: create trace
-    assert: "recipient_id IS NOT NULL (G-MM3/MMM-11 kept — traces are ALWAYS polymorphic, never orphan)"
+    # G-MM3/MMM-11 kept: traces are always polymorphic, never orphan.
+    when: [create]
+    assert: "recipient_id != null"
     error_code: trace_recipient_required
     enforcement: db
-    justification: "PARTLY: recipient_id is an unnamed inline NOT NULL and mint_trace takes a non-optional id, so no trace is minted without one, but nothing named can be claimed, traces carry no foreign key so an orphan is not refused, and trace_recipient_required is never produced."
+    justification: "Compiled into the generated write guard, so every trace create without a recipient is refused with trace_recipient_required; recipient_id is also an inline NOT NULL. Traces carry no foreign key, so a recipient id that names no row is not refused."
     # The @required column constraint IS the guard (NOT NULL fires on raw SQL).
   - id: R-M4
     name: subscription_unique_contact_list
@@ -108,11 +110,13 @@ rules:
   - id: R-M8
     name: campaign_cleared_while_ab_testing_refused
     entity: Mailing
-    when: update mailing
-    assert: "clearing campaign_id while ab_testing_enabled is refused (G-MM9 kept — an A/B mailing without its campaign would orphan the campaign-keyed dedup and the test row)"
+    # G-MM9 kept: an A/B mailing without its campaign would orphan the
+    # campaign-keyed dedup and the test row.
+    when: [create, update]
+    assert: "!ab_testing_enabled || campaign_id != null"
     error_code: campaign_required_for_ab_testing
     enforcement: service
-    justification: "PARTLY: update_draft leaves campaign_id out of its SET list so the update verb cannot clear it, but nothing refuses: create_mailing accepts A/B testing with no campaign and any test id, no foreign key binds the test, the mounted generic A/B test writes can rewrite or delete the test row, and campaign_required_for_ab_testing is never produced."
+    justification: "Compiled into the generated write guard, so every create and update of a mailing refuses A/B testing without a campaign with campaign_required_for_ab_testing. No foreign key binds the A/B test, and the mounted generic A/B test writes can still rewrite or delete the test row."
 
 # triggers: []   (not read by the generator in a list-format hook file)
 # (none — upstream's create/write side-effect ladder (cron arming via ORM

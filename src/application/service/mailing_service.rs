@@ -90,6 +90,14 @@ impl backbone_core::write_guard::WriteGuard<Mailing> for MailingRowRules {
         if (create || (update && r::changed(old.as_ref(), row, &["reply_to"]))) && !r::holds(&r::le(r::length(r::field(row, "reply_to")), r::Val::Num(255.0_f64))) {
             refuse.push(Violation::new("reply_to", "max_length", "reply_to must be at most 255 characters").with_param("max", 255_i64));
         }
+        // `email_from_required_for_mail` (mailing.hook.yaml:54)
+        if (create || update) && !r::holds(&r::or(r::ne(r::field(row, "mailing_type"), r::text("mail")), r::and(r::is_not_null(r::field(row, "email_from")), r::gt(r::length(r::trim(r::field(row, "email_from"))), r::Val::Num(0.0_f64))))) {
+            refuse.push(Violation::new("mailing_type", "email_from_required", "breaks the rule `email_from_required_for_mail`: mailing_type != 'mail' || (email_from != null && email_from.trim().length > 0)"));
+        }
+        // `campaign_cleared_while_ab_testing_refused` (mailing.hook.yaml:110)
+        if (create || update) && !r::holds(&r::or(r::not(r::field(row, "ab_testing_enabled")), r::is_not_null(r::field(row, "campaign_id")))) {
+            refuse.push(Violation::new("ab_testing_enabled", "campaign_required_for_ab_testing", "breaks the rule `campaign_cleared_while_ab_testing_refused`: !ab_testing_enabled || campaign_id != null"));
+        }
         GuardOutcome { refuse, shadow }
     }
 }

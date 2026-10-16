@@ -49,9 +49,6 @@ pub struct CreateMailingDto {
     #[cfg_attr(feature = "openapi", schema(example = true))]
     #[serde(alias = "keep_archives")]
     pub keep_archives: bool,
-    pub state: MailingState,
-    #[serde(alias = "schedule_type")]
-    pub schedule_type: MailingScheduleType,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "schedule_date")]
     pub schedule_date: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "sent_date")]
@@ -395,8 +392,8 @@ impl From<CreateMailingDto> for Mailing {
             email_from: dto.email_from,
             reply_to: dto.reply_to,
             keep_archives: dto.keep_archives,
-            state: dto.state,
-            schedule_type: dto.schedule_type,
+            state: MailingState::Draft,
+            schedule_type: MailingScheduleType::Immediate,
             schedule_date: dto.schedule_date,
             sent_date: dto.sent_date,
             mailing_type: dto.mailing_type,

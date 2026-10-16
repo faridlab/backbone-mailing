@@ -58,8 +58,6 @@ pub struct CreateMailingTraceDto {
     pub recipient_phone: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "message_id")]
     pub message_id: Option<String>,
-    #[serde(alias = "trace_status")]
-    pub trace_status: TraceStatus,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "failure_type")]
     pub failure_type: Option<TraceFailureType>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "failure_reason")]
@@ -350,7 +348,7 @@ impl From<CreateMailingTraceDto> for MailingTrace {
             sms_uuid: dto.sms_uuid,
             recipient_phone: dto.recipient_phone,
             message_id: dto.message_id,
-            trace_status: dto.trace_status,
+            trace_status: TraceStatus::Outgoing,
             failure_type: dto.failure_type,
             failure_reason: dto.failure_reason,
             sent_datetime: dto.sent_datetime,

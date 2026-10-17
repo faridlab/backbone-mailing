@@ -37,7 +37,7 @@ impl SubscriptionWriteError {
         match self {
             Self::Db(_) => "mailing_db_error",
             Self::NotFound(_) => "not_found",
-            Self::Conflict(_) => "audience_in_use",
+            Self::Conflict(_) => "list_in_use",
             Self::Invalid(_) => "invalid_input",
             // Deliberately ONE code for unknown, archived, and private —
             // the self-service edge must not let a caller distinguish the
@@ -255,6 +255,10 @@ impl SubscriptionWriteService {
         audience_id: Uuid,
     ) -> Result<i64, SubscriptionWriteError> {
         let mut tx = crate::request_pool::begin(&self.pool).await?;
+        if !SubscriptionRepository::lock_audience(&mut tx, audience_id).await? {
+            tx.rollback().await?;
+            return Err(SubscriptionWriteError::NotFound(format!("audience {audience_id}")));
+        }
         let in_use = SubscriptionRepository::audience_in_use_by_mailings(&mut tx, audience_id)
             .await?;
         if !in_use.is_empty() {

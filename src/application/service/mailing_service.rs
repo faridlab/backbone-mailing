@@ -94,7 +94,7 @@ impl backbone_core::write_guard::WriteGuard<Mailing> for MailingRowRules {
         if (create || update) && !r::holds(&r::or(r::ne(r::field(row, "mailing_type"), r::text("mail")), r::and(r::is_not_null(r::field(row, "email_from")), r::gt(r::length(r::trim(r::field(row, "email_from"))), r::Val::Num(0.0_f64))))) {
             refuse.push(Violation::new("mailing_type", "email_from_required", "breaks the rule `email_from_required_for_mail`: mailing_type != 'mail' || (email_from != null && email_from.trim().length > 0)"));
         }
-        // `campaign_cleared_while_ab_testing_refused` (mailing.hook.yaml:110)
+        // `campaign_cleared_while_ab_testing_refused` (mailing.hook.yaml:111)
         if (create || update) && !r::holds(&r::or(r::not(r::field(row, "ab_testing_enabled")), r::is_not_null(r::field(row, "campaign_id")))) {
             refuse.push(Violation::new("ab_testing_enabled", "campaign_required_for_ab_testing", "breaks the rule `campaign_cleared_while_ab_testing_refused`: !ab_testing_enabled || campaign_id != null"));
         }

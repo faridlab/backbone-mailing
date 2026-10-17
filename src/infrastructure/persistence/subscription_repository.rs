@@ -166,25 +166,21 @@ impl SubscriptionRepository {
         .await
     }
 
-    /// R-M7 archive guard: mailings still in flight whose canonical domain
-    /// JSON cites this audience. The canonical form stores each term as
-    /// `{"field":"mailing_audience_id","op":"=","value":"<uuid>"}` — the
-    /// probe flattens every jsonb value in the array and looks for the uuid
-    /// text anywhere in the set, so `=`, `in`, and `not in` citations all
-    /// block the archive.
+    /// R-M7 archive guard: mailings still in flight whose domain names this
+    /// audience anywhere, at any depth, so a list inside an `in` or `not in`
+    /// term counts as well as an `=` one. The same match the database's
+    /// `mailing_audiences_list_archive_guard` trigger applies.
     pub async fn audience_in_use_by_mailings(
         conn: &mut PgConnection,
         audience_id: Uuid,
     ) -> Result<Vec<Uuid>, sqlx::Error> {
         sqlx::query_scalar::<_, Uuid>(
             r#"SELECT m.id
-               FROM mailing.mailings m,
-                    jsonb_array_elements(m.mailing_domain) term,
-                    jsonb_each(term) kv
+               FROM mailing.mailings m
                WHERE m.state IN ('draft', 'in_queue', 'sending')
                  AND (m.metadata->>'deleted_at') IS NULL
-                 AND kv.value #>> '{}' = $1::text
-               GROUP BY m.id"#,
+                 AND jsonb_path_exists(m.mailing_domain, '$.** ? (@ == $id)',
+                                       jsonb_build_object('id', $1::text))"#,
         )
         .bind(audience_id.to_string())
         .fetch_all(&mut *conn)
@@ -257,6 +253,24 @@ impl SubscriptionRepository {
 
     /// Soft-delete an audience — the archive verb's write, AFTER the R-M7
     /// in-use guard passed.
+    /// Lock a live audience row for an archive, so a mailing naming it (which
+    /// takes a share lock on it) either committed before the probe that
+    /// follows or waits until the archive is done. `false` when absent.
+    pub async fn lock_audience(
+        conn: &mut PgConnection,
+        audience_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar::<_, i32>(
+            r#"SELECT 1 FROM mailing.mailing_audiences
+               WHERE id = $1 AND (metadata->>'deleted_at') IS NULL
+               FOR UPDATE"#,
+        )
+        .bind(audience_id)
+        .fetch_optional(&mut *conn)
+        .await
+        .map(|r| r.is_some())
+    }
+
     pub async fn soft_delete_audience(
         conn: &mut PgConnection,
         audience_id: Uuid,

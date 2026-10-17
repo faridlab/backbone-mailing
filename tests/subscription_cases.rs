@@ -207,12 +207,58 @@ async fn archive_guard_refuses_while_a_mailing_cites_the_audience() {
         .await
         .expect_err("must refuse");
     assert_eq!(err.http_status(), 409);
-    assert_eq!(err.code(), "audience_in_use");
+    assert_eq!(err.code(), "list_in_use");
 
     // Complete the mailing, and the archive passes with the member count.
     engine.send_queue_sweep().await.expect("sweep");
     let members = subs.archive_audience(audience_id).await.expect("archive");
     assert_eq!(members, 2);
+    db.dispose().await;
+}
+
+/// A list a live mailing names inside an `in` term is in use too, and the database refuses an
+/// archive that skips the verb (the generic surface turning it inactive or soft-deleting it).
+#[tokio::test]
+async fn a_list_named_in_an_in_term_cannot_be_archived_by_any_writer() {
+    let Some(db) = TestDb::new("r7in").await else {
+        return skipped("r7in");
+    };
+    let (audience_id, _) = seed_audience(&db.pool, "guarded-in", 1).await;
+    let engine = MailingWriteService::new(db.pool.clone());
+    let cmd = MailingUpsertCommand {
+        subject: "Draft".into(),
+        preview: None,
+        body_html: "<p>x</p>".into(),
+        email_from: "c@example.id".into(),
+        reply_to: None,
+        mailing_domain_raw: serde_json::json!([
+            ["mailing_audience_id", "in", [audience_id.to_string(), Uuid::new_v4().to_string()]]
+        ]),
+        target_model: "mailing_contact".into(),
+        schedule_type: "immediate".into(),
+        schedule_date: None,
+        use_exclusion_list: true,
+        campaign_id: None,
+        source_id: None,
+        ab_test_id: None,
+        ab_testing_enabled: false,
+        ab_testing_pc: 0,
+    };
+    engine.create_mailing(&cmd).await.expect("create");
+
+    let subs = SubscriptionWriteService::new(db.pool.clone());
+    let err = subs.archive_audience(audience_id).await.expect_err("the verb refuses");
+    assert_eq!(err.code(), "list_in_use");
+
+    for raw in [
+        "UPDATE mailing.mailing_audiences SET active = false WHERE id = $1",
+        "UPDATE mailing.mailing_audiences SET metadata = metadata || jsonb_build_object('deleted_at', now()) WHERE id = $1",
+        "DELETE FROM mailing.mailing_audiences WHERE id = $1",
+    ] {
+        let refused = sqlx::query(raw).bind(audience_id).execute(&db.pool).await.expect_err(raw);
+        let e = refused.as_database_error().expect("a database refusal");
+        assert_eq!(e.constraint(), Some("ck_mailing_audiences_list_archive_guard__list_in_use"), "{raw}: {e:?}");
+    }
     db.dispose().await;
 }
 

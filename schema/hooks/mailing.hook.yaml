@@ -103,10 +103,11 @@ rules:
     name: list_archive_guard
     entity: MailingAudience
     when: update list
-    assert: "archiving (active=false) is refused while any mailing with state != done targets the audience (G-MM7 kept — cross-table, so the verb enforces)"
+    assert: "archiving a list (a soft delete, active turned false, or a delete) is refused while any mailing with state != done names it in its domain (G-MM7 kept)"
     error_code: list_in_use
-    enforcement: service
-    justification: "PARTLY: archive_audience refuses a list cited by a live mailing, but it soft-deletes where the rule says archive, its citation probe misses lists named inside an in or not-in clause, the read is not locked against a mailing created meanwhile, it answers audience_in_use rather than list_in_use, and serpa mounts no route that calls it."
+    enforcement: both
+    enforced_by: "migrations/20261017160000_list_archive_guard.up.sql::mailing_audiences_list_archive_guard, src/application/service/subscription_write_service.rs::archive_audience"
+    justification: "The trigger mailing_audiences_list_archive_guard refuses, for every writer, a soft delete, active turned false or a delete of a list a mailing not yet done names anywhere in its domain (an in or not-in term included); mailings_share_named_lists takes a share lock on each list a mailing write names, so an archive and that write take turns. archive_audience locks the list first and answers list_in_use with the mailings that hold it (tests/subscription_cases.rs a_list_named_in_an_in_term_cannot_be_archived_by_any_writer). Cross-table: the rule reads the mailings, which no CHECK on the list row can see."
   - id: R-M8
     name: campaign_cleared_while_ab_testing_refused
     entity: Mailing

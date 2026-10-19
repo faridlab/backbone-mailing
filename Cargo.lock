@@ -871,9 +871,9 @@ dependencies = [
 
 [[package]]
 name = "backbone-auth"
-version = "3.7.0"
+version = "3.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6586bb70b22e7a713ac0017acb163f6332992c66f739bc3db88dcabdf2513f9b"
+checksum = "c442dd138a98349e44a3e1b105df2967b8647f48c825775be0a01c856caf32f0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -896,20 +896,26 @@ dependencies = [
 
 [[package]]
 name = "backbone-core"
-version = "3.7.1"
+version = "3.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73740cefc21550d4f2c6111fe64d0645559786b78a6ddfee567a05f79f189ec2"
+checksum = "aee8963cda60b46ef3ceb7c524bae3055b1a6dd3b41531f4f2fc67641b2a9831"
 dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "backbone-auth",
  "backbone-messaging",
  "backbone-orm",
+ "backbone-outbox",
  "chrono",
  "prost",
  "regex",
+ "rust_decimal",
  "serde",
+ "serde_ignored",
  "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
  "serde_yaml",
  "sqlx",
  "thiserror 1.0.69",
@@ -996,7 +1002,7 @@ dependencies = [
 
 [[package]]
 name = "backbone-mailing"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1041,9 +1047,9 @@ dependencies = [
 
 [[package]]
 name = "backbone-messaging"
-version = "3.7.1"
+version = "3.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e6ab9ff0c645a4cb0568fa53954c49e19f434656eb898705cbea346d89309a5"
+checksum = "f4478aa69f046d8d8d356e5f30027a60e267ac6b559586b6be0fe63d77b2f04d"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1057,9 +1063,9 @@ dependencies = [
 
 [[package]]
 name = "backbone-orm"
-version = "3.7.1"
+version = "3.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63c667503ed9140e730826b26076e6b6671ff3d676472bbcfc34ddebd01bfacc"
+checksum = "5b67138897a1a7957865ad427b9e1311331ef566e142b4f13da15702fe079d5f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1077,15 +1083,17 @@ dependencies = [
 
 [[package]]
 name = "backbone-outbox"
-version = "3.7.0"
+version = "3.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "736ee8c825277b66acaec425eb972c73606c28db66c0d2fe72ee6e4df0315eeb"
+checksum = "ce2a4a02370e617978fac59b7677757919198071d9bd0b110a775ecca6ce203b"
 dependencies = [
+ "backbone-orm",
  "chrono",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 1.0.69",
+ "tracing",
  "uuid",
 ]
 
@@ -4551,6 +4559,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.7",
+]
+
+[[package]]
+name = "serde_ignored"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "115dffd5f3853e06e746965a20dcbae6ee747ae30b543d91b0e089668bb07798"
+dependencies = [
+ "serde",
+ "serde_core",
 ]
 
 [[package]]

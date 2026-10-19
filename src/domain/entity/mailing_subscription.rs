@@ -187,6 +187,14 @@ impl super::Entity for MailingSubscription {
 }
 
 impl backbone_core::PersistentEntity for MailingSubscription {
+    fn references() -> &'static [backbone_core::Reference] {
+        const REFERENCES: &[backbone_core::Reference] = &[
+            backbone_core::Reference::new("contact_id", "mailing.mailing_contacts", "id"),
+            backbone_core::Reference::new("mailing_audience_id", "mailing.mailing_audiences", "id"),
+            backbone_core::Reference::new("opt_out_reason_id", "mailing.mailing_opt_out_reasons", "id"),
+        ];
+        REFERENCES
+    }
     fn entity_id(&self) -> String {
         self.id.to_string()
     }

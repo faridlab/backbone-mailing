@@ -81,6 +81,13 @@ impl axum::response::IntoResponse for MailingAbTestError {
 // Route Configuration
 // =============================================================================
 
+/// The permissions this entity's generic routes require: `mailing_ab_test:<action>` for `read`, `create`,
+/// `update`, `delete`, `restore` and `purge`, with any rename the schema's `requires:` declares.
+pub fn mailing_ab_test_permissions() -> backbone_core::http::CrudPermissions {
+    backbone_core::http::CrudPermissions::new("mailing_ab_test")
+        .in_module("mailing")
+}
+
 /// Create Axum router with all 16 Backbone endpoints for MailingAbTest.
 ///
 /// # Routes
@@ -110,21 +117,23 @@ impl axum::response::IntoResponse for MailingAbTestError {
 /// let router = create_mailing_ab_test_routes(service);
 /// ```
 pub fn create_mailing_ab_test_routes(service: Arc<MailingAbTestService>) -> Router {
-    BackboneCrudHandler::<MailingAbTestService, MailingAbTest, CreateMailingAbTestDto, UpdateMailingAbTestDto, MailingAbTestResponseDto>::routes(
+    BackboneCrudHandler::<MailingAbTestService, MailingAbTest, CreateMailingAbTestDto, UpdateMailingAbTestDto, MailingAbTestResponseDto>::routes_guarded(
         service,
         "/mailing_ab_tests",
+        mailing_ab_test_permissions(),
     )
 }
 
 /// Create Axum router with only the read (GET) endpoints for MailingAbTest.
 ///
-/// Safe for public, unauthenticated exposure (e.g., reference data).
+/// Each route requires the entity's `read` permission, so it needs an authenticated caller.
 /// Mutations must be served separately via `create_mailing_ab_test_write_routes`,
 /// typically wrapped in an auth middleware layer.
 pub fn create_mailing_ab_test_read_routes(service: Arc<MailingAbTestService>) -> Router {
-    BackboneCrudHandler::<MailingAbTestService, MailingAbTest, CreateMailingAbTestDto, UpdateMailingAbTestDto, MailingAbTestResponseDto>::read_routes(
+    BackboneCrudHandler::<MailingAbTestService, MailingAbTest, CreateMailingAbTestDto, UpdateMailingAbTestDto, MailingAbTestResponseDto>::read_routes_guarded(
         service,
         "/mailing_ab_tests",
+        mailing_ab_test_permissions(),
     )
 }
 
@@ -140,9 +149,10 @@ pub fn create_mailing_ab_test_read_routes(service: Arc<MailingAbTestService>) ->
 /// service (e.g. a command router over its domain engine), serve THAT instead
 /// for any mutation that must respect domain rules.
 pub fn create_mailing_ab_test_write_routes(service: Arc<MailingAbTestService>) -> Router {
-    BackboneCrudHandler::<MailingAbTestService, MailingAbTest, CreateMailingAbTestDto, UpdateMailingAbTestDto, MailingAbTestResponseDto>::write_routes(
+    BackboneCrudHandler::<MailingAbTestService, MailingAbTest, CreateMailingAbTestDto, UpdateMailingAbTestDto, MailingAbTestResponseDto>::write_routes_guarded(
         service,
         "/mailing_ab_tests",
+        mailing_ab_test_permissions(),
     )
 }
 

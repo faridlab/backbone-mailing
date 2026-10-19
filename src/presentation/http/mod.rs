@@ -16,14 +16,14 @@ pub mod mailing_filter_handler;
 
 
 // Re-exports
-pub use mailing_ab_test_handler::{create_mailing_ab_test_routes, create_mailing_ab_test_read_routes, create_mailing_ab_test_write_routes};
-pub use mailing_audience_handler::{create_mailing_audience_routes, create_mailing_audience_read_routes, create_mailing_audience_write_routes};
-pub use mailing_contact_handler::{create_mailing_contact_routes, create_mailing_contact_read_routes, create_mailing_contact_write_routes};
-pub use mailing_subscription_handler::{create_mailing_subscription_routes, create_mailing_subscription_read_routes, create_mailing_subscription_write_routes};
-pub use opt_out_reason_handler::{create_opt_out_reason_routes, create_opt_out_reason_read_routes, create_opt_out_reason_write_routes};
-pub use mailing_handler::{create_mailing_routes, create_mailing_read_routes, create_mailing_write_routes};
-pub use mailing_trace_handler::{create_mailing_trace_routes, create_mailing_trace_read_routes, create_mailing_trace_write_routes};
-pub use mailing_filter_handler::{create_mailing_filter_routes, create_mailing_filter_read_routes, create_mailing_filter_write_routes};
+pub use mailing_ab_test_handler::{create_mailing_ab_test_routes, create_mailing_ab_test_read_routes, create_mailing_ab_test_write_routes, mailing_ab_test_permissions};
+pub use mailing_audience_handler::{create_mailing_audience_routes, create_mailing_audience_read_routes, create_mailing_audience_write_routes, mailing_audience_permissions};
+pub use mailing_contact_handler::{create_mailing_contact_routes, create_mailing_contact_read_routes, create_mailing_contact_write_routes, mailing_contact_permissions};
+pub use mailing_subscription_handler::{create_mailing_subscription_routes, create_mailing_subscription_read_routes, create_mailing_subscription_write_routes, mailing_subscription_permissions};
+pub use opt_out_reason_handler::{create_opt_out_reason_routes, create_opt_out_reason_read_routes, create_opt_out_reason_write_routes, opt_out_reason_permissions};
+pub use mailing_handler::{create_mailing_routes, create_mailing_read_routes, create_mailing_write_routes, mailing_permissions};
+pub use mailing_trace_handler::{create_mailing_trace_routes, create_mailing_trace_read_routes, create_mailing_trace_write_routes, mailing_trace_permissions};
+pub use mailing_filter_handler::{create_mailing_filter_routes, create_mailing_filter_read_routes, create_mailing_filter_write_routes, mailing_filter_permissions};
 
 // This directory's extension (hand-written; ADR-0031).
 include!("mod.ext.rs");

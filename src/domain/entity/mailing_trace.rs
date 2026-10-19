@@ -329,6 +329,17 @@ impl backbone_core::PersistentEntity for MailingTrace {
     fn write_protected_fields() -> &'static [&'static str] {
         &["trace_status"]
     }
+    fn state_fields() -> &'static [&'static str] {
+        &["trace_status"]
+    }
+    fn references() -> &'static [backbone_core::Reference] {
+        const REFERENCES: &[backbone_core::Reference] = &[
+            backbone_core::Reference::new("mailing_id", "mailing.mailings", "id"),
+            backbone_core::Reference::new("campaign_id", "engagement_campaigns", "id"),
+            backbone_core::Reference::new("mail_id", "mails", "id"),
+        ];
+        REFERENCES
+    }
     fn entity_id(&self) -> String {
         self.id.to_string()
     }

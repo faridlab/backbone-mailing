@@ -32,19 +32,24 @@ pub struct CreateMailingAbTestDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "campaign_id")]
     pub campaign_id: Uuid,
-    #[serde(alias = "winner_selection")]
+    #[serde(default = "default_create_mailing_ab_test_winner_selection", alias = "winner_selection")]
     pub winner_selection: AbWinnerSelection,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "winner_selection_sms")]
     pub winner_selection_sms: Option<AbWinnerSelection>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "promote_at")]
     pub promote_at: Option<DateTime<Utc>>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
+    #[serde(default)]
     pub completed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "winner_mailing_id")]
     pub winner_mailing_id: Option<Uuid>,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(alias = "sampling_seed")]
     pub sampling_seed: String,
+}
+
+fn default_create_mailing_ab_test_winner_selection() -> AbWinnerSelection {
+    AbWinnerSelection::OpenedRatio
 }
 
 // =============================================================================
@@ -94,15 +99,15 @@ pub struct PatchMailingAbTestDto {
     pub campaign_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "winner_selection")]
     pub winner_selection: Option<AbWinnerSelection>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "winner_selection_sms")]
-    pub winner_selection_sms: Option<AbWinnerSelection>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "promote_at")]
-    pub promote_at: Option<DateTime<Utc>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "winner_selection_sms")]
+    pub winner_selection_sms: Option<Option<AbWinnerSelection>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "promote_at")]
+    pub promote_at: Option<Option<DateTime<Utc>>>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "winner_mailing_id")]
-    pub winner_mailing_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "winner_mailing_id")]
+    pub winner_mailing_id: Option<Option<Uuid>>,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "sampling_seed")]
     pub sampling_seed: Option<String>,
@@ -285,12 +290,4 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingAbTestDto> for MailingAbTest {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to MailingAbTest here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

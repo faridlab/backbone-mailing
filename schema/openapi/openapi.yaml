@@ -1881,30 +1881,6 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-    post:
-      tags:
-        - Mailings
-      summary: Create Mailing
-      description: Create a new Mailing
-      operationId: createMailing
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateMailingRequest'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Mailing'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
   /api/v1/mailing/mailings/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
@@ -1924,181 +1900,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-    put:
-      tags:
-        - Mailings
-      summary: Update Mailing (full)
-      operationId: updateMailing
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateMailingRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Mailing'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    patch:
-      tags:
-        - Mailings
-      summary: Update Mailing (partial)
-      operationId: patchMailing
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchMailingRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Mailing'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    delete:
-      tags:
-        - Mailings
-      summary: Delete Mailing (soft)
-      operationId: deleteMailing
-      responses:
-        '204':
-          description: Deleted
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/mailing/mailings/bulk:
-    post:
-      tags:
-        - Mailings
-      summary: Bulk create Mailings
-      operationId: bulkCreateMailings
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/CreateMailingRequest'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Mailing'
-    put:
-      tags:
-        - Mailings
-      summary: Bulk update Mailings (full, atomic)
-      operationId: bulkUpdateMailings
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                allOf:
-                  - type: object
-                    required: [id]
-                    properties:
-                      id:
-                        type: string
-                  - $ref: '#/components/schemas/UpdateMailingRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MailingBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-    patch:
-      tags:
-        - Mailings
-      summary: Bulk partial-update Mailings (atomic)
-      operationId: bulkPatchMailings
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - type: object
-                  required: [ids, patch]
-                  properties:
-                    ids:
-                      type: array
-                      items: { type: string }
-                    patch:
-                      type: object
-                      additionalProperties: true
-                - type: object
-                  required: [items]
-                  properties:
-                    items:
-                      type: array
-                      items:
-                        type: object
-                        required: [id, patch]
-                        properties:
-                          id: { type: string }
-                          patch: { type: object, additionalProperties: true }
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MailingBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/mailing/mailings/upsert:
-    post:
-      tags:
-        - Mailings
-      summary: Upsert Mailing
-      operationId: upsertMailing
-      parameters:
-        - name: key_field
-          in: query
-          schema:
-            type: string
-        - name: key_value
-          in: query
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateMailingRequest'
-      responses:
-        '200':
-          description: Upserted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Mailing'
-
   /api/v1/mailing/mailings/trash:
     get:
       tags:
@@ -2115,115 +1916,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MailingList'
-
-  /api/v1/mailing/mailings/{id}/restore:
-    parameters:
-      - $ref: '#/components/parameters/IdParam'
-    post:
-      tags:
-        - Mailings
-      summary: Restore deleted Mailing
-      operationId: restoreMailing
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Mailing'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/mailing/mailings/empty:
-    delete:
-      tags:
-        - Mailings
-      summary: Empty trash for Mailings
-      operationId: emptyTrashMailings
-      responses:
-        '200':
-          description: Trash emptied
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  deleted_count:
-                    type: integer
-
-  /api/v1/mailing/mailings/delete/bulk:
-    post:
-      tags:
-        - Mailings
-      summary: Bulk soft-delete Mailings by ids (atomic)
-      operationId: bulkDeleteMailings
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Soft-deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  soft_deleted: { type: integer }
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/mailing/mailings/restore/bulk:
-    post:
-      tags:
-        - Mailings
-      summary: Bulk restore Mailings by ids (atomic)
-      operationId: bulkRestoreMailings
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MailingBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/mailing/mailings/restore/all:
-    post:
-      tags:
-        - Mailings
-      summary: Restore all soft-deleted Mailings
-      operationId: restoreAllMailings
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  restored: { type: integer }
-
-  /api/v1/mailing/mailings/trash/bulk:
-    delete:
-      tags:
-        - Mailings
-      summary: Bulk permanently-delete Mailings from trash by ids (atomic)
-      operationId: bulkPermanentDeleteMailings
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Permanently deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  permanently_deleted: { type: integer }
-        '400':
-          $ref: '#/components/responses/BadRequest'
 
   /api/v1/mailing/mailing_traces:
     get:
@@ -2247,30 +1939,6 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-    post:
-      tags:
-        - MailingTraces
-      summary: Create MailingTrace
-      description: Create a new MailingTrace
-      operationId: createMailingTrace
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateMailingTraceRequest'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MailingTrace'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
   /api/v1/mailing/mailing_traces/{id}:
     parameters:
       - $ref: '#/components/parameters/IdParam'
@@ -2290,181 +1958,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-    put:
-      tags:
-        - MailingTraces
-      summary: Update MailingTrace (full)
-      operationId: updateMailingTrace
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateMailingTraceRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MailingTrace'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    patch:
-      tags:
-        - MailingTraces
-      summary: Update MailingTrace (partial)
-      operationId: patchMailingTrace
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchMailingTraceRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MailingTrace'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    delete:
-      tags:
-        - MailingTraces
-      summary: Delete MailingTrace (soft)
-      operationId: deleteMailingTrace
-      responses:
-        '204':
-          description: Deleted
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/mailing/mailing_traces/bulk:
-    post:
-      tags:
-        - MailingTraces
-      summary: Bulk create MailingTraces
-      operationId: bulkCreateMailingTraces
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/CreateMailingTraceRequest'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/MailingTrace'
-    put:
-      tags:
-        - MailingTraces
-      summary: Bulk update MailingTraces (full, atomic)
-      operationId: bulkUpdateMailingTraces
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: array
-              items:
-                allOf:
-                  - type: object
-                    required: [id]
-                    properties:
-                      id:
-                        type: string
-                  - $ref: '#/components/schemas/UpdateMailingTraceRequest'
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MailingTraceBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-    patch:
-      tags:
-        - MailingTraces
-      summary: Bulk partial-update MailingTraces (atomic)
-      operationId: bulkPatchMailingTraces
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              oneOf:
-                - type: object
-                  required: [ids, patch]
-                  properties:
-                    ids:
-                      type: array
-                      items: { type: string }
-                    patch:
-                      type: object
-                      additionalProperties: true
-                - type: object
-                  required: [items]
-                  properties:
-                    items:
-                      type: array
-                      items:
-                        type: object
-                        required: [id, patch]
-                        properties:
-                          id: { type: string }
-                          patch: { type: object, additionalProperties: true }
-      responses:
-        '200':
-          description: Updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MailingTraceBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/mailing/mailing_traces/upsert:
-    post:
-      tags:
-        - MailingTraces
-      summary: Upsert MailingTrace
-      operationId: upsertMailingTrace
-      parameters:
-        - name: key_field
-          in: query
-          schema:
-            type: string
-        - name: key_value
-          in: query
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateMailingTraceRequest'
-      responses:
-        '200':
-          description: Upserted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MailingTrace'
-
   /api/v1/mailing/mailing_traces/trash:
     get:
       tags:
@@ -2481,115 +1974,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MailingTraceList'
-
-  /api/v1/mailing/mailing_traces/{id}/restore:
-    parameters:
-      - $ref: '#/components/parameters/IdParam'
-    post:
-      tags:
-        - MailingTraces
-      summary: Restore deleted MailingTrace
-      operationId: restoreMailingTrace
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MailingTrace'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/mailing/mailing_traces/empty:
-    delete:
-      tags:
-        - MailingTraces
-      summary: Empty trash for MailingTraces
-      operationId: emptyTrashMailingTraces
-      responses:
-        '200':
-          description: Trash emptied
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  deleted_count:
-                    type: integer
-
-  /api/v1/mailing/mailing_traces/delete/bulk:
-    post:
-      tags:
-        - MailingTraces
-      summary: Bulk soft-delete MailingTraces by ids (atomic)
-      operationId: bulkDeleteMailingTraces
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Soft-deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  soft_deleted: { type: integer }
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/mailing/mailing_traces/restore/bulk:
-    post:
-      tags:
-        - MailingTraces
-      summary: Bulk restore MailingTraces by ids (atomic)
-      operationId: bulkRestoreMailingTraces
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MailingTraceBulkResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
-  /api/v1/mailing/mailing_traces/restore/all:
-    post:
-      tags:
-        - MailingTraces
-      summary: Restore all soft-deleted MailingTraces
-      operationId: restoreAllMailingTraces
-      responses:
-        '200':
-          description: Restored
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  restored: { type: integer }
-
-  /api/v1/mailing/mailing_traces/trash/bulk:
-    delete:
-      tags:
-        - MailingTraces
-      summary: Bulk permanently-delete MailingTraces from trash by ids (atomic)
-      operationId: bulkPermanentDeleteMailingTraces
-      requestBody:
-        $ref: '#/components/requestBodies/BatchIds'
-      responses:
-        '200':
-          description: Permanently deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  permanently_deleted: { type: integer }
-        '400':
-          $ref: '#/components/responses/BadRequest'
 
   /api/v1/mailing/mailing_filters:
     get:
@@ -3013,10 +2397,7 @@ components:
       type: object
       required:
         - campaign_id
-        - winner_selection
-        - completed
         - sampling_seed
-        - metadata
       properties:
         campaign_id:
           type: string
@@ -3039,8 +2420,6 @@ components:
         sampling_seed:
           type: string
           maxLength: 64
-        metadata:
-          type: object
 
     UpdateMailingAbTestRequest:
       type: object
@@ -3049,7 +2428,6 @@ components:
         - winner_selection
         - completed
         - sampling_seed
-        - metadata
       properties:
         campaign_id:
           type: string
@@ -3072,8 +2450,6 @@ components:
         sampling_seed:
           type: string
           maxLength: 64
-        metadata:
-          type: object
 
     PatchMailingAbTestRequest:
       type: object
@@ -3099,8 +2475,6 @@ components:
         sampling_seed:
           type: string
           maxLength: 64
-        metadata:
-          type: object
 
     MailingAbTestList:
       type: object
@@ -3151,9 +2525,6 @@ components:
       type: object
       required:
         - name
-        - active
-        - is_public
-        - metadata
       properties:
         name:
           type: string
@@ -3162,8 +2533,6 @@ components:
           type: boolean
         is_public:
           type: boolean
-        metadata:
-          type: object
 
     UpdateMailingAudienceRequest:
       type: object
@@ -3171,7 +2540,6 @@ components:
         - name
         - active
         - is_public
-        - metadata
       properties:
         name:
           type: string
@@ -3180,8 +2548,6 @@ components:
           type: boolean
         is_public:
           type: boolean
-        metadata:
-          type: object
 
     PatchMailingAudienceRequest:
       type: object
@@ -3193,8 +2559,6 @@ components:
           type: boolean
         is_public:
           type: boolean
-        metadata:
-          type: object
 
     MailingAudienceList:
       type: object
@@ -3263,7 +2627,6 @@ components:
       type: object
       required:
         - email
-        - metadata
       properties:
         name:
           nullable: true
@@ -3292,14 +2655,11 @@ components:
           nullable: true
           type: string
           maxLength: 64
-        metadata:
-          type: object
 
     UpdateMailingContactRequest:
       type: object
       required:
         - email
-        - metadata
       properties:
         name:
           nullable: true
@@ -3328,8 +2688,6 @@ components:
           nullable: true
           type: string
           maxLength: 64
-        metadata:
-          type: object
 
     PatchMailingContactRequest:
       type: object
@@ -3361,8 +2719,6 @@ components:
           nullable: true
           type: string
           maxLength: 64
-        metadata:
-          type: object
 
     MailingContactList:
       type: object
@@ -3423,8 +2779,6 @@ components:
       required:
         - contact_id
         - mailing_audience_id
-        - opt_out
-        - metadata
       properties:
         contact_id:
           type: string
@@ -3442,8 +2796,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     UpdateMailingSubscriptionRequest:
       type: object
@@ -3451,7 +2803,6 @@ components:
         - contact_id
         - mailing_audience_id
         - opt_out
-        - metadata
       properties:
         contact_id:
           type: string
@@ -3469,8 +2820,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     PatchMailingSubscriptionRequest:
       type: object
@@ -3491,8 +2840,6 @@ components:
           nullable: true
           type: string
           format: uuid
-        metadata:
-          type: object
 
     MailingSubscriptionList:
       type: object
@@ -3544,9 +2891,6 @@ components:
       type: object
       required:
         - name
-        - sequence
-        - is_feedback
-        - metadata
       properties:
         name:
           type: string
@@ -3556,8 +2900,6 @@ components:
           format: int32
         is_feedback:
           type: boolean
-        metadata:
-          type: object
 
     UpdateOptOutReasonRequest:
       type: object
@@ -3565,7 +2907,6 @@ components:
         - name
         - sequence
         - is_feedback
-        - metadata
       properties:
         name:
           type: string
@@ -3575,8 +2916,6 @@ components:
           format: int32
         is_feedback:
           type: boolean
-        metadata:
-          type: object
 
     PatchOptOutReasonRequest:
       type: object
@@ -3589,8 +2928,6 @@ components:
           format: int32
         is_feedback:
           type: boolean
-        metadata:
-          type: object
 
     OptOutReasonList:
       type: object
@@ -3714,17 +3051,6 @@ components:
         - subject
         - body_html
         - email_from
-        - keep_archives
-        - state
-        - schedule_type
-        - mailing_type
-        - target_model
-        - mailing_domain
-        - use_exclusion_list
-        - ab_testing_enabled
-        - ab_testing_pc
-        - kpi_mail_required
-        - metadata
       properties:
         subject:
           type: string
@@ -3747,10 +3073,6 @@ components:
           maxLength: 255
         keep_archives:
           type: boolean
-        state:
-          type: string
-        schedule_type:
-          type: string
         schedule_date:
           nullable: true
           type: string
@@ -3794,8 +3116,6 @@ components:
           format: uuid
         kpi_mail_required:
           type: boolean
-        metadata:
-          type: object
 
     UpdateMailingRequest:
       type: object
@@ -3813,7 +3133,6 @@ components:
         - ab_testing_enabled
         - ab_testing_pc
         - kpi_mail_required
-        - metadata
       properties:
         subject:
           type: string
@@ -3883,8 +3202,6 @@ components:
           format: uuid
         kpi_mail_required:
           type: boolean
-        metadata:
-          type: object
 
     PatchMailingRequest:
       type: object
@@ -3957,8 +3274,6 @@ components:
           format: uuid
         kpi_mail_required:
           type: boolean
-        metadata:
-          type: object
 
     MailingList:
       type: object
@@ -4065,14 +3380,10 @@ components:
     CreateMailingTraceRequest:
       type: object
       required:
-        - trace_type
-        - is_test_trace
         - mailing_id
         - recipient_model
         - recipient_id
         - recipient_email
-        - trace_status
-        - metadata
       properties:
         trace_type:
           type: string
@@ -4110,8 +3421,6 @@ components:
           nullable: true
           type: string
           maxLength: 255
-        trace_status:
-          type: string
         failure_type:
           nullable: true
           type: string
@@ -4134,8 +3443,6 @@ components:
           nullable: true
           type: string
           format: date-time
-        metadata:
-          type: object
 
     UpdateMailingTraceRequest:
       type: object
@@ -4147,7 +3454,6 @@ components:
         - recipient_id
         - recipient_email
         - trace_status
-        - metadata
       properties:
         trace_type:
           type: string
@@ -4209,8 +3515,6 @@ components:
           nullable: true
           type: string
           format: date-time
-        metadata:
-          type: object
 
     PatchMailingTraceRequest:
       type: object
@@ -4275,8 +3579,6 @@ components:
           nullable: true
           type: string
           format: date-time
-        metadata:
-          type: object
 
     MailingTraceList:
       type: object
@@ -4327,9 +3629,6 @@ components:
       type: object
       required:
         - name
-        - target_model
-        - domain
-        - metadata
       properties:
         name:
           type: string
@@ -4337,8 +3636,6 @@ components:
         target_model:
           type: string
         domain:
-          type: object
-        metadata:
           type: object
 
     UpdateMailingFilterRequest:
@@ -4347,7 +3644,6 @@ components:
         - name
         - target_model
         - domain
-        - metadata
       properties:
         name:
           type: string
@@ -4355,8 +3651,6 @@ components:
         target_model:
           type: string
         domain:
-          type: object
-        metadata:
           type: object
 
     PatchMailingFilterRequest:
@@ -4368,8 +3662,6 @@ components:
         target_model:
           type: string
         domain:
-          type: object
-        metadata:
           type: object
 
     MailingFilterList:

@@ -35,7 +35,7 @@ pub struct CreateMailingSubscriptionDto {
     #[serde(alias = "mailing_audience_id")]
     pub mailing_audience_id: Uuid,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "opt_out")]
+    #[serde(default, alias = "opt_out")]
     pub opt_out: bool,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "opt_out_datetime")]
     pub opt_out_datetime: Option<DateTime<Utc>>,
@@ -91,10 +91,10 @@ pub struct PatchMailingSubscriptionDto {
     #[cfg_attr(feature = "openapi", schema(example = true))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "opt_out")]
     pub opt_out: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "opt_out_datetime")]
-    pub opt_out_datetime: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "opt_out_reason_id")]
-    pub opt_out_reason_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "opt_out_datetime")]
+    pub opt_out_datetime: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "opt_out_reason_id")]
+    pub opt_out_reason_id: Option<Option<Uuid>>,
 }
 
 impl PatchMailingSubscriptionDto {
@@ -264,12 +264,4 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingSubscriptionDto> for MailingSubs
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to MailingSubscription here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

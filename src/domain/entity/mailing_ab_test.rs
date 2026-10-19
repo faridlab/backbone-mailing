@@ -205,6 +205,13 @@ impl super::Entity for MailingAbTest {
 }
 
 impl backbone_core::PersistentEntity for MailingAbTest {
+    fn references() -> &'static [backbone_core::Reference] {
+        const REFERENCES: &[backbone_core::Reference] = &[
+            backbone_core::Reference::new("campaign_id", "engagement_campaigns", "id"),
+            backbone_core::Reference::new("winner_mailing_id", "mailing.mailings", "id"),
+        ];
+        REFERENCES
+    }
     fn entity_id(&self) -> String {
         self.id.to_string()
     }

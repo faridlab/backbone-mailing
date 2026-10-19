@@ -80,6 +80,13 @@ impl axum::response::IntoResponse for MailingContactError {
 // Route Configuration
 // =============================================================================
 
+/// The permissions this entity's generic routes require: `mailing_contact:<action>` for `read`, `create`,
+/// `update`, `delete`, `restore` and `purge`, with any rename the schema's `requires:` declares.
+pub fn mailing_contact_permissions() -> backbone_core::http::CrudPermissions {
+    backbone_core::http::CrudPermissions::new("mailing_contact")
+        .in_module("mailing")
+}
+
 /// Create Axum router with all 16 Backbone endpoints for MailingContact.
 ///
 /// # Routes
@@ -109,21 +116,23 @@ impl axum::response::IntoResponse for MailingContactError {
 /// let router = create_mailing_contact_routes(service);
 /// ```
 pub fn create_mailing_contact_routes(service: Arc<MailingContactService>) -> Router {
-    BackboneCrudHandler::<MailingContactService, MailingContact, CreateMailingContactDto, UpdateMailingContactDto, MailingContactResponseDto>::routes(
+    BackboneCrudHandler::<MailingContactService, MailingContact, CreateMailingContactDto, UpdateMailingContactDto, MailingContactResponseDto>::routes_guarded(
         service,
         "/mailing_contacts",
+        mailing_contact_permissions(),
     )
 }
 
 /// Create Axum router with only the read (GET) endpoints for MailingContact.
 ///
-/// Safe for public, unauthenticated exposure (e.g., reference data).
+/// Each route requires the entity's `read` permission, so it needs an authenticated caller.
 /// Mutations must be served separately via `create_mailing_contact_write_routes`,
 /// typically wrapped in an auth middleware layer.
 pub fn create_mailing_contact_read_routes(service: Arc<MailingContactService>) -> Router {
-    BackboneCrudHandler::<MailingContactService, MailingContact, CreateMailingContactDto, UpdateMailingContactDto, MailingContactResponseDto>::read_routes(
+    BackboneCrudHandler::<MailingContactService, MailingContact, CreateMailingContactDto, UpdateMailingContactDto, MailingContactResponseDto>::read_routes_guarded(
         service,
         "/mailing_contacts",
+        mailing_contact_permissions(),
     )
 }
 
@@ -139,9 +148,10 @@ pub fn create_mailing_contact_read_routes(service: Arc<MailingContactService>) -
 /// service (e.g. a command router over its domain engine), serve THAT instead
 /// for any mutation that must respect domain rules.
 pub fn create_mailing_contact_write_routes(service: Arc<MailingContactService>) -> Router {
-    BackboneCrudHandler::<MailingContactService, MailingContact, CreateMailingContactDto, UpdateMailingContactDto, MailingContactResponseDto>::write_routes(
+    BackboneCrudHandler::<MailingContactService, MailingContact, CreateMailingContactDto, UpdateMailingContactDto, MailingContactResponseDto>::write_routes_guarded(
         service,
         "/mailing_contacts",
+        mailing_contact_permissions(),
     )
 }
 

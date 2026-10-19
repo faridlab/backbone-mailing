@@ -47,20 +47,20 @@ pub struct CreateMailingDto {
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "reply_to")]
     pub reply_to: Option<String>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "keep_archives")]
+    #[serde(default = "default_create_mailing_keep_archives", alias = "keep_archives")]
     pub keep_archives: bool,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "schedule_date")]
     pub schedule_date: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "sent_date")]
     pub sent_date: Option<DateTime<Utc>>,
-    #[serde(alias = "mailing_type")]
+    #[serde(default = "default_create_mailing_mailing_type", alias = "mailing_type")]
     pub mailing_type: MailingType,
-    #[serde(alias = "target_model")]
+    #[serde(default = "default_create_mailing_target_model", alias = "target_model")]
     pub target_model: MailingTargetModel,
-    #[serde(alias = "mailing_domain")]
+    #[serde(default = "default_create_mailing_mailing_domain", alias = "mailing_domain")]
     pub mailing_domain: serde_json::Value,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "use_exclusion_list")]
+    #[serde(default = "default_create_mailing_use_exclusion_list", alias = "use_exclusion_list")]
     pub use_exclusion_list: bool,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "campaign_id")]
     pub campaign_id: Option<Uuid>,
@@ -71,16 +71,40 @@ pub struct CreateMailingDto {
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "user_id")]
     pub user_id: Option<Uuid>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "ab_testing_enabled")]
+    #[serde(default, alias = "ab_testing_enabled")]
     pub ab_testing_enabled: bool,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
-    #[serde(alias = "ab_testing_pc")]
+    #[serde(default = "default_create_mailing_ab_testing_pc", alias = "ab_testing_pc")]
     pub ab_testing_pc: i32,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "ab_test_id")]
     pub ab_test_id: Option<Uuid>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "kpi_mail_required")]
+    #[serde(default, alias = "kpi_mail_required")]
     pub kpi_mail_required: bool,
+}
+
+fn default_create_mailing_keep_archives() -> bool {
+    true
+}
+
+fn default_create_mailing_mailing_type() -> MailingType {
+    MailingType::Mail
+}
+
+fn default_create_mailing_target_model() -> MailingTargetModel {
+    MailingTargetModel::MailingContact
+}
+
+fn default_create_mailing_mailing_domain() -> serde_json::Value {
+    serde_json::json!({})
+}
+
+fn default_create_mailing_use_exclusion_list() -> bool {
+    true
+}
+
+fn default_create_mailing_ab_testing_pc() -> i32 {
+    10
 }
 
 // =============================================================================
@@ -164,18 +188,18 @@ pub struct PatchMailingDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub preview: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option")]
+    pub preview: Option<Option<String>>,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "body_html")]
     pub body_html: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "body_plaintext")]
-    pub body_plaintext: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "body_plaintext")]
+    pub body_plaintext: Option<Option<String>>,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "email_from")]
     pub email_from: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "reply_to")]
-    pub reply_to: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "reply_to")]
+    pub reply_to: Option<Option<String>>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "keep_archives")]
     pub keep_archives: Option<bool>,
@@ -183,10 +207,10 @@ pub struct PatchMailingDto {
     pub state: Option<MailingState>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "schedule_type")]
     pub schedule_type: Option<MailingScheduleType>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "schedule_date")]
-    pub schedule_date: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "sent_date")]
-    pub sent_date: Option<DateTime<Utc>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "schedule_date")]
+    pub schedule_date: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "sent_date")]
+    pub sent_date: Option<Option<DateTime<Utc>>>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "mailing_type")]
     pub mailing_type: Option<MailingType>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "target_model")]
@@ -196,22 +220,22 @@ pub struct PatchMailingDto {
     #[cfg_attr(feature = "openapi", schema(example = true))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "use_exclusion_list")]
     pub use_exclusion_list: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "campaign_id")]
-    pub campaign_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "medium_id")]
-    pub medium_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "source_id")]
-    pub source_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "user_id")]
-    pub user_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "campaign_id")]
+    pub campaign_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "medium_id")]
+    pub medium_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "source_id")]
+    pub source_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "user_id")]
+    pub user_id: Option<Option<Uuid>>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "ab_testing_enabled")]
     pub ab_testing_enabled: Option<bool>,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "ab_testing_pc")]
     pub ab_testing_pc: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "ab_test_id")]
-    pub ab_test_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "ab_test_id")]
+    pub ab_test_id: Option<Option<Uuid>>,
     #[cfg_attr(feature = "openapi", schema(example = true))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "kpi_mail_required")]
     pub kpi_mail_required: Option<bool>,
@@ -479,12 +503,4 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingDto> for Mailing {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to Mailing here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

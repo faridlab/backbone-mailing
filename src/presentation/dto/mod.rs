@@ -106,6 +106,16 @@ pub struct PaginationParams {
 fn default_page() -> u32 { 1 }
 fn default_per_page() -> u32 { 20 }
 
+/// Reads a PATCH field that is present, `null` included, as `Some(..)`, so a nullable column
+/// can be cleared; with `#[serde(default)]` an absent field stays `None`.
+pub fn double_option<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    <Option<T> as serde::Deserialize>::deserialize(deserializer).map(Some)
+}
+
 /// API response wrapper
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "openapi", derive(ToSchema))]

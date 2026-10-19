@@ -81,6 +81,13 @@ impl axum::response::IntoResponse for MailingError {
 // Route Configuration
 // =============================================================================
 
+/// The permissions this entity's generic routes require: `mailing:<action>` for `read`, `create`,
+/// `update`, `delete`, `restore` and `purge`, with any rename the schema's `requires:` declares.
+pub fn mailing_permissions() -> backbone_core::http::CrudPermissions {
+    backbone_core::http::CrudPermissions::new("mailing")
+        .in_module("mailing")
+}
+
 /// Create Axum router with all 16 Backbone endpoints for Mailing.
 ///
 /// # Routes
@@ -110,21 +117,23 @@ impl axum::response::IntoResponse for MailingError {
 /// let router = create_mailing_routes(service);
 /// ```
 pub fn create_mailing_routes(service: Arc<MailingService>) -> Router {
-    BackboneCrudHandler::<MailingService, Mailing, CreateMailingDto, UpdateMailingDto, MailingResponseDto>::routes(
+    BackboneCrudHandler::<MailingService, Mailing, CreateMailingDto, UpdateMailingDto, MailingResponseDto>::routes_guarded(
         service,
         "/mailings",
+        mailing_permissions(),
     )
 }
 
 /// Create Axum router with only the read (GET) endpoints for Mailing.
 ///
-/// Safe for public, unauthenticated exposure (e.g., reference data).
+/// Each route requires the entity's `read` permission, so it needs an authenticated caller.
 /// Mutations must be served separately via `create_mailing_write_routes`,
 /// typically wrapped in an auth middleware layer.
 pub fn create_mailing_read_routes(service: Arc<MailingService>) -> Router {
-    BackboneCrudHandler::<MailingService, Mailing, CreateMailingDto, UpdateMailingDto, MailingResponseDto>::read_routes(
+    BackboneCrudHandler::<MailingService, Mailing, CreateMailingDto, UpdateMailingDto, MailingResponseDto>::read_routes_guarded(
         service,
         "/mailings",
+        mailing_permissions(),
     )
 }
 
@@ -140,9 +149,10 @@ pub fn create_mailing_read_routes(service: Arc<MailingService>) -> Router {
 /// service (e.g. a command router over its domain engine), serve THAT instead
 /// for any mutation that must respect domain rules.
 pub fn create_mailing_write_routes(service: Arc<MailingService>) -> Router {
-    BackboneCrudHandler::<MailingService, Mailing, CreateMailingDto, UpdateMailingDto, MailingResponseDto>::write_routes(
+    BackboneCrudHandler::<MailingService, Mailing, CreateMailingDto, UpdateMailingDto, MailingResponseDto>::write_routes_guarded(
         service,
         "/mailings",
+        mailing_permissions(),
     )
 }
 
@@ -199,33 +209,26 @@ pub async fn launch_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
     auth: Option<axum::Extension<AuthContext>>,
+    waiver: Option<axum::Extension<backbone_auth::PermissionWaiver>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
+
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return backbone_core::http::unauthenticated_refusal::<MailingResponseDto>();
+    };
+    if waiver.is_none() {
+        if let Err(refused) = auth.require_with("mailing:launch", &["mailing:launch"]) {
+            return backbone_core::http::permission_refusal::<MailingResponseDto>(&refused);
+        }
+    }
 
     // Get current entity
     let entity = match service.get_by_id(&id).await {
         Ok(Some(e)) => e,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => return backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     };
-
-    // Check permission
-    let Some(axum::Extension(auth)) = auth else {
-        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingResponseDto>::error("A transition needs an authenticated caller")));
-    };
-    {
-        let allowed_roles = MailingStateTransition::Launch.allowed_roles();
-        let granted = |required: &str| auth.permissions.iter().any(|p| {
-            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
-            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
-                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
-        });
-        let has_specific_perm = granted("mailing:transition:launch");
-        let _ = &allowed_roles;
-        if !has_specific_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("launch needs mailing:transition:launch")));
-        }
-    }
 
     // Create state machine from entity's actual status and validate transition
     let current_state: MailingStateState = match entity.state.to_string().parse() {
@@ -234,7 +237,11 @@ pub async fn launch_transition(
     };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::Launch) {
-        return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
+        let refusal = backbone_core::service::ServiceError::Violations(vec![backbone_core::Violation::new("state", "transition_not_allowed", "launch is not allowed from the current state")
+            .with_param("transition", "launch")
+            .with_param("from", serde_json::to_value(&entity.state).unwrap_or_default())
+            .with_param("to", "in_queue")]);
+        return backbone_core::http::service_error_response::<MailingResponseDto>(&refusal);
     }
 
     // Apply transition via partial update
@@ -247,7 +254,7 @@ pub async fn launch_transition(
             (StatusCode::OK, Json(ApiResponse::ok(response)))
         }
         Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     }
 }
 
@@ -258,33 +265,26 @@ pub async fn pickup_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
     auth: Option<axum::Extension<AuthContext>>,
+    waiver: Option<axum::Extension<backbone_auth::PermissionWaiver>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
+
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return backbone_core::http::unauthenticated_refusal::<MailingResponseDto>();
+    };
+    if waiver.is_none() {
+        if let Err(refused) = auth.require_with("mailing:pickup", &["mailing:pickup"]) {
+            return backbone_core::http::permission_refusal::<MailingResponseDto>(&refused);
+        }
+    }
 
     // Get current entity
     let entity = match service.get_by_id(&id).await {
         Ok(Some(e)) => e,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => return backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     };
-
-    // Check permission
-    let Some(axum::Extension(auth)) = auth else {
-        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingResponseDto>::error("A transition needs an authenticated caller")));
-    };
-    {
-        let allowed_roles = MailingStateTransition::Pickup.allowed_roles();
-        let granted = |required: &str| auth.permissions.iter().any(|p| {
-            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
-            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
-                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
-        });
-        let has_specific_perm = granted("mailing:transition:pickup");
-        let _ = &allowed_roles;
-        if !has_specific_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("pickup needs mailing:transition:pickup")));
-        }
-    }
 
     // Create state machine from entity's actual status and validate transition
     let current_state: MailingStateState = match entity.state.to_string().parse() {
@@ -293,7 +293,11 @@ pub async fn pickup_transition(
     };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::Pickup) {
-        return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
+        let refusal = backbone_core::service::ServiceError::Violations(vec![backbone_core::Violation::new("state", "transition_not_allowed", "pickup is not allowed from the current state")
+            .with_param("transition", "pickup")
+            .with_param("from", serde_json::to_value(&entity.state).unwrap_or_default())
+            .with_param("to", "sending")]);
+        return backbone_core::http::service_error_response::<MailingResponseDto>(&refusal);
     }
 
     // Apply transition via partial update
@@ -306,7 +310,7 @@ pub async fn pickup_transition(
             (StatusCode::OK, Json(ApiResponse::ok(response)))
         }
         Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     }
 }
 
@@ -317,33 +321,26 @@ pub async fn complete_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
     auth: Option<axum::Extension<AuthContext>>,
+    waiver: Option<axum::Extension<backbone_auth::PermissionWaiver>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
+
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return backbone_core::http::unauthenticated_refusal::<MailingResponseDto>();
+    };
+    if waiver.is_none() {
+        if let Err(refused) = auth.require_with("mailing:complete", &["mailing:complete"]) {
+            return backbone_core::http::permission_refusal::<MailingResponseDto>(&refused);
+        }
+    }
 
     // Get current entity
     let entity = match service.get_by_id(&id).await {
         Ok(Some(e)) => e,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => return backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     };
-
-    // Check permission
-    let Some(axum::Extension(auth)) = auth else {
-        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingResponseDto>::error("A transition needs an authenticated caller")));
-    };
-    {
-        let allowed_roles = MailingStateTransition::Complete.allowed_roles();
-        let granted = |required: &str| auth.permissions.iter().any(|p| {
-            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
-            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
-                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
-        });
-        let has_specific_perm = granted("mailing:transition:complete");
-        let _ = &allowed_roles;
-        if !has_specific_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("complete needs mailing:transition:complete")));
-        }
-    }
 
     // Create state machine from entity's actual status and validate transition
     let current_state: MailingStateState = match entity.state.to_string().parse() {
@@ -352,7 +349,11 @@ pub async fn complete_transition(
     };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::Complete) {
-        return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
+        let refusal = backbone_core::service::ServiceError::Violations(vec![backbone_core::Violation::new("state", "transition_not_allowed", "complete is not allowed from the current state")
+            .with_param("transition", "complete")
+            .with_param("from", serde_json::to_value(&entity.state).unwrap_or_default())
+            .with_param("to", "done")]);
+        return backbone_core::http::service_error_response::<MailingResponseDto>(&refusal);
     }
 
     // Apply transition via partial update
@@ -365,7 +366,7 @@ pub async fn complete_transition(
             (StatusCode::OK, Json(ApiResponse::ok(response)))
         }
         Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     }
 }
 
@@ -376,33 +377,26 @@ pub async fn complete_empty_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
     auth: Option<axum::Extension<AuthContext>>,
+    waiver: Option<axum::Extension<backbone_auth::PermissionWaiver>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
+
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return backbone_core::http::unauthenticated_refusal::<MailingResponseDto>();
+    };
+    if waiver.is_none() {
+        if let Err(refused) = auth.require_with("mailing:complete_empty", &["mailing:complete_empty"]) {
+            return backbone_core::http::permission_refusal::<MailingResponseDto>(&refused);
+        }
+    }
 
     // Get current entity
     let entity = match service.get_by_id(&id).await {
         Ok(Some(e)) => e,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => return backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     };
-
-    // Check permission
-    let Some(axum::Extension(auth)) = auth else {
-        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingResponseDto>::error("A transition needs an authenticated caller")));
-    };
-    {
-        let allowed_roles = MailingStateTransition::CompleteEmpty.allowed_roles();
-        let granted = |required: &str| auth.permissions.iter().any(|p| {
-            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
-            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
-                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
-        });
-        let has_specific_perm = granted("mailing:transition:complete_empty");
-        let _ = &allowed_roles;
-        if !has_specific_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("complete_empty needs mailing:transition:complete_empty")));
-        }
-    }
 
     // Create state machine from entity's actual status and validate transition
     let current_state: MailingStateState = match entity.state.to_string().parse() {
@@ -411,7 +405,11 @@ pub async fn complete_empty_transition(
     };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::CompleteEmpty) {
-        return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
+        let refusal = backbone_core::service::ServiceError::Violations(vec![backbone_core::Violation::new("state", "transition_not_allowed", "complete_empty is not allowed from the current state")
+            .with_param("transition", "complete_empty")
+            .with_param("from", serde_json::to_value(&entity.state).unwrap_or_default())
+            .with_param("to", "done")]);
+        return backbone_core::http::service_error_response::<MailingResponseDto>(&refusal);
     }
 
     // Apply transition via partial update
@@ -424,7 +422,7 @@ pub async fn complete_empty_transition(
             (StatusCode::OK, Json(ApiResponse::ok(response)))
         }
         Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     }
 }
 
@@ -435,33 +433,26 @@ pub async fn cancel_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
     auth: Option<axum::Extension<AuthContext>>,
+    waiver: Option<axum::Extension<backbone_auth::PermissionWaiver>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
+
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return backbone_core::http::unauthenticated_refusal::<MailingResponseDto>();
+    };
+    if waiver.is_none() {
+        if let Err(refused) = auth.require_with("mailing:cancel", &["mailing:cancel"]) {
+            return backbone_core::http::permission_refusal::<MailingResponseDto>(&refused);
+        }
+    }
 
     // Get current entity
     let entity = match service.get_by_id(&id).await {
         Ok(Some(e)) => e,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => return backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     };
-
-    // Check permission
-    let Some(axum::Extension(auth)) = auth else {
-        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingResponseDto>::error("A transition needs an authenticated caller")));
-    };
-    {
-        let allowed_roles = MailingStateTransition::Cancel.allowed_roles();
-        let granted = |required: &str| auth.permissions.iter().any(|p| {
-            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
-            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
-                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
-        });
-        let has_specific_perm = granted("mailing:transition:cancel");
-        let _ = &allowed_roles;
-        if !has_specific_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("cancel needs mailing:transition:cancel")));
-        }
-    }
 
     // Create state machine from entity's actual status and validate transition
     let current_state: MailingStateState = match entity.state.to_string().parse() {
@@ -470,7 +461,11 @@ pub async fn cancel_transition(
     };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::Cancel) {
-        return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
+        let refusal = backbone_core::service::ServiceError::Violations(vec![backbone_core::Violation::new("state", "transition_not_allowed", "cancel is not allowed from the current state")
+            .with_param("transition", "cancel")
+            .with_param("from", serde_json::to_value(&entity.state).unwrap_or_default())
+            .with_param("to", "draft")]);
+        return backbone_core::http::service_error_response::<MailingResponseDto>(&refusal);
     }
 
     // Apply transition via partial update
@@ -483,7 +478,7 @@ pub async fn cancel_transition(
             (StatusCode::OK, Json(ApiResponse::ok(response)))
         }
         Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     }
 }
 
@@ -494,33 +489,26 @@ pub async fn unpark_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
     auth: Option<axum::Extension<AuthContext>>,
+    waiver: Option<axum::Extension<backbone_auth::PermissionWaiver>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
+
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return backbone_core::http::unauthenticated_refusal::<MailingResponseDto>();
+    };
+    if waiver.is_none() {
+        if let Err(refused) = auth.require_with("mailing:unpark", &["mailing:unpark"]) {
+            return backbone_core::http::permission_refusal::<MailingResponseDto>(&refused);
+        }
+    }
 
     // Get current entity
     let entity = match service.get_by_id(&id).await {
         Ok(Some(e)) => e,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => return backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     };
-
-    // Check permission
-    let Some(axum::Extension(auth)) = auth else {
-        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingResponseDto>::error("A transition needs an authenticated caller")));
-    };
-    {
-        let allowed_roles = MailingStateTransition::Unpark.allowed_roles();
-        let granted = |required: &str| auth.permissions.iter().any(|p| {
-            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
-            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
-                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
-        });
-        let has_specific_perm = granted("mailing:transition:unpark");
-        let _ = &allowed_roles;
-        if !has_specific_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("unpark needs mailing:transition:unpark")));
-        }
-    }
 
     // Create state machine from entity's actual status and validate transition
     let current_state: MailingStateState = match entity.state.to_string().parse() {
@@ -529,7 +517,11 @@ pub async fn unpark_transition(
     };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::Unpark) {
-        return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
+        let refusal = backbone_core::service::ServiceError::Violations(vec![backbone_core::Violation::new("state", "transition_not_allowed", "unpark is not allowed from the current state")
+            .with_param("transition", "unpark")
+            .with_param("from", serde_json::to_value(&entity.state).unwrap_or_default())
+            .with_param("to", "in_queue")]);
+        return backbone_core::http::service_error_response::<MailingResponseDto>(&refusal);
     }
 
     // Apply transition via partial update
@@ -542,7 +534,7 @@ pub async fn unpark_transition(
             (StatusCode::OK, Json(ApiResponse::ok(response)))
         }
         Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     }
 }
 
@@ -553,33 +545,26 @@ pub async fn retry_failed_transition(
     axum::extract::State(service): axum::extract::State<Arc<MailingService>>,
     axum::extract::Path(id): axum::extract::Path<String>,
     auth: Option<axum::Extension<AuthContext>>,
+    waiver: Option<axum::Extension<backbone_auth::PermissionWaiver>>,
 ) -> impl axum::response::IntoResponse {
     use axum::{http::StatusCode, Json};
+
+    // Check permission
+    let Some(axum::Extension(auth)) = auth else {
+        return backbone_core::http::unauthenticated_refusal::<MailingResponseDto>();
+    };
+    if waiver.is_none() {
+        if let Err(refused) = auth.require_with("mailing:retry_failed", &["mailing:retry_failed"]) {
+            return backbone_core::http::permission_refusal::<MailingResponseDto>(&refused);
+        }
+    }
 
     // Get current entity
     let entity = match service.get_by_id(&id).await {
         Ok(Some(e)) => e,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => return backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     };
-
-    // Check permission
-    let Some(axum::Extension(auth)) = auth else {
-        return (StatusCode::UNAUTHORIZED, Json(ApiResponse::<MailingResponseDto>::error("A transition needs an authenticated caller")));
-    };
-    {
-        let allowed_roles = MailingStateTransition::RetryFailed.allowed_roles();
-        let granted = |required: &str| auth.permissions.iter().any(|p| {
-            let (have, want): (Vec<&str>, Vec<&str>) = (p.split(':').collect(), required.split(':').collect());
-            have.iter().enumerate().all(|(i, h)| *h == "*" || want.get(i) == Some(h))
-                && (have.len() == want.len() || (have.len() < want.len() && have.last() == Some(&"*")))
-        });
-        let has_specific_perm = granted("mailing:transition:retry_failed");
-        let _ = &allowed_roles;
-        if !has_specific_perm {
-            return (StatusCode::FORBIDDEN, Json(ApiResponse::<MailingResponseDto>::error("retry_failed needs mailing:transition:retry_failed")));
-        }
-    }
 
     // Create state machine from entity's actual status and validate transition
     let current_state: MailingStateState = match entity.state.to_string().parse() {
@@ -588,7 +573,11 @@ pub async fn retry_failed_transition(
     };
     let sm = MailingStateStateMachine::from_state(current_state);
     if !sm.can_transition(MailingStateTransition::RetryFailed) {
-        return (StatusCode::BAD_REQUEST, Json(ApiResponse::<MailingResponseDto>::error("Transition not allowed from current state")));
+        let refusal = backbone_core::service::ServiceError::Violations(vec![backbone_core::Violation::new("state", "transition_not_allowed", "retry_failed is not allowed from the current state")
+            .with_param("transition", "retry_failed")
+            .with_param("from", serde_json::to_value(&entity.state).unwrap_or_default())
+            .with_param("to", "in_queue")]);
+        return backbone_core::http::service_error_response::<MailingResponseDto>(&refusal);
     }
 
     // Apply transition via partial update
@@ -601,7 +590,7 @@ pub async fn retry_failed_transition(
             (StatusCode::OK, Json(ApiResponse::ok(response)))
         }
         Ok(None) => (StatusCode::NOT_FOUND, Json(ApiResponse::<MailingResponseDto>::not_found("Mailing", &id))),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResponse::<MailingResponseDto>::error(e.to_string()))),
+        Err(e) => backbone_core::http::service_error_response::<MailingResponseDto>(&e),
     }
 }
 
@@ -618,5 +607,6 @@ pub fn create_mailing_transition_routes(service: Arc<MailingService>) -> Router 
         .route("/mailings/:id/transitions/unpark", post(unpark_transition))
         .route("/mailings/:id/transitions/retry_failed", post(retry_failed_transition))
         .with_state(service)
+        .layer(axum::middleware::from_fn(backbone_core::http::correlation_middleware))
 }
 

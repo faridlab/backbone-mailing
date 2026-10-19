@@ -31,10 +31,15 @@ pub struct CreateOptOutReasonDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
     #[cfg_attr(feature = "openapi", schema(example = 42))]
+    #[serde(default = "default_create_opt_out_reason_sequence")]
     pub sequence: i32,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "is_feedback")]
+    #[serde(default, alias = "is_feedback")]
     pub is_feedback: bool,
+}
+
+fn default_create_opt_out_reason_sequence() -> i32 {
+    10
 }
 
 // =============================================================================
@@ -238,12 +243,4 @@ impl backbone_core::ApplyUpdateDto<UpdateOptOutReasonDto> for OptOutReason {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to OptOutReason here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

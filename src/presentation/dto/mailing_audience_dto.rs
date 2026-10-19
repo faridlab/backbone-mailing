@@ -31,10 +31,15 @@ pub struct CreateMailingAudienceDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
     #[cfg_attr(feature = "openapi", schema(example = true))]
+    #[serde(default = "default_create_mailing_audience_active")]
     pub active: bool,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "is_public")]
+    #[serde(default, alias = "is_public")]
     pub is_public: bool,
+}
+
+fn default_create_mailing_audience_active() -> bool {
+    true
 }
 
 // =============================================================================
@@ -238,12 +243,4 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingAudienceDto> for MailingAudience
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to MailingAudience here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

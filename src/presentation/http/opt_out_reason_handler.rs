@@ -80,6 +80,13 @@ impl axum::response::IntoResponse for OptOutReasonError {
 // Route Configuration
 // =============================================================================
 
+/// The permissions this entity's generic routes require: `opt_out_reason:<action>` for `read`, `create`,
+/// `update`, `delete`, `restore` and `purge`, with any rename the schema's `requires:` declares.
+pub fn opt_out_reason_permissions() -> backbone_core::http::CrudPermissions {
+    backbone_core::http::CrudPermissions::new("opt_out_reason")
+        .in_module("mailing")
+}
+
 /// Create Axum router with all 16 Backbone endpoints for OptOutReason.
 ///
 /// # Routes
@@ -109,21 +116,23 @@ impl axum::response::IntoResponse for OptOutReasonError {
 /// let router = create_opt_out_reason_routes(service);
 /// ```
 pub fn create_opt_out_reason_routes(service: Arc<OptOutReasonService>) -> Router {
-    BackboneCrudHandler::<OptOutReasonService, OptOutReason, CreateOptOutReasonDto, UpdateOptOutReasonDto, OptOutReasonResponseDto>::routes(
+    BackboneCrudHandler::<OptOutReasonService, OptOutReason, CreateOptOutReasonDto, UpdateOptOutReasonDto, OptOutReasonResponseDto>::routes_guarded(
         service,
         "/opt_out_reasons",
+        opt_out_reason_permissions(),
     )
 }
 
 /// Create Axum router with only the read (GET) endpoints for OptOutReason.
 ///
-/// Safe for public, unauthenticated exposure (e.g., reference data).
+/// Each route requires the entity's `read` permission, so it needs an authenticated caller.
 /// Mutations must be served separately via `create_opt_out_reason_write_routes`,
 /// typically wrapped in an auth middleware layer.
 pub fn create_opt_out_reason_read_routes(service: Arc<OptOutReasonService>) -> Router {
-    BackboneCrudHandler::<OptOutReasonService, OptOutReason, CreateOptOutReasonDto, UpdateOptOutReasonDto, OptOutReasonResponseDto>::read_routes(
+    BackboneCrudHandler::<OptOutReasonService, OptOutReason, CreateOptOutReasonDto, UpdateOptOutReasonDto, OptOutReasonResponseDto>::read_routes_guarded(
         service,
         "/opt_out_reasons",
+        opt_out_reason_permissions(),
     )
 }
 
@@ -139,9 +148,10 @@ pub fn create_opt_out_reason_read_routes(service: Arc<OptOutReasonService>) -> R
 /// service (e.g. a command router over its domain engine), serve THAT instead
 /// for any mutation that must respect domain rules.
 pub fn create_opt_out_reason_write_routes(service: Arc<OptOutReasonService>) -> Router {
-    BackboneCrudHandler::<OptOutReasonService, OptOutReason, CreateOptOutReasonDto, UpdateOptOutReasonDto, OptOutReasonResponseDto>::write_routes(
+    BackboneCrudHandler::<OptOutReasonService, OptOutReason, CreateOptOutReasonDto, UpdateOptOutReasonDto, OptOutReasonResponseDto>::write_routes_guarded(
         service,
         "/opt_out_reasons",
+        opt_out_reason_permissions(),
     )
 }
 

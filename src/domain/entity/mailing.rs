@@ -349,6 +349,18 @@ impl backbone_core::PersistentEntity for Mailing {
     fn write_protected_fields() -> &'static [&'static str] {
         &["state", "schedule_type"]
     }
+    fn state_fields() -> &'static [&'static str] {
+        &["state"]
+    }
+    fn references() -> &'static [backbone_core::Reference] {
+        const REFERENCES: &[backbone_core::Reference] = &[
+            backbone_core::Reference::new("campaign_id", "engagement_campaigns", "id"),
+            backbone_core::Reference::new("medium_id", "engagement_mediums", "id"),
+            backbone_core::Reference::new("source_id", "engagement_sources", "id"),
+            backbone_core::Reference::new("ab_test_id", "mailing.mailing_ab_tests", "id"),
+        ];
+        REFERENCES
+    }
     fn entity_id(&self) -> String {
         self.id.to_string()
     }

@@ -31,9 +31,18 @@ use crate::domain::entity::MailingTargetModel;
 pub struct CreateMailingFilterDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     pub name: String,
-    #[serde(alias = "target_model")]
+    #[serde(default = "default_create_mailing_filter_target_model", alias = "target_model")]
     pub target_model: MailingTargetModel,
+    #[serde(default = "default_create_mailing_filter_domain")]
     pub domain: serde_json::Value,
+}
+
+fn default_create_mailing_filter_target_model() -> MailingTargetModel {
+    MailingTargetModel::MailingContact
+}
+
+fn default_create_mailing_filter_domain() -> serde_json::Value {
+    serde_json::json!({})
 }
 
 // =============================================================================
@@ -231,12 +240,4 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingFilterDto> for MailingFilter {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to MailingFilter here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

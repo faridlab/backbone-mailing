@@ -31,10 +31,10 @@ use crate::domain::entity::TraceType;
 #[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMailingTraceDto {
-    #[serde(alias = "trace_type")]
+    #[serde(default = "default_create_mailing_trace_trace_type", alias = "trace_type")]
     pub trace_type: TraceType,
     #[cfg_attr(feature = "openapi", schema(example = true))]
-    #[serde(alias = "is_test_trace")]
+    #[serde(default, alias = "is_test_trace")]
     pub is_test_trace: bool,
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(alias = "mailing_id")]
@@ -70,6 +70,10 @@ pub struct CreateMailingTraceDto {
     pub reply_datetime: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "links_click_datetime")]
     pub links_click_datetime: Option<DateTime<Utc>>,
+}
+
+fn default_create_mailing_trace_trace_type() -> TraceType {
+    TraceType::Mail
 }
 
 // =============================================================================
@@ -147,8 +151,8 @@ pub struct PatchMailingTraceDto {
     #[cfg_attr(feature = "openapi", schema(example = "550e8400-e29b-41d4-a716-446655440000"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "mailing_id")]
     pub mailing_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "campaign_id")]
-    pub campaign_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "campaign_id")]
+    pub campaign_id: Option<Option<Uuid>>,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "recipient_model")]
     pub recipient_model: Option<String>,
@@ -158,28 +162,28 @@ pub struct PatchMailingTraceDto {
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none", alias = "recipient_email")]
     pub recipient_email: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "mail_id")]
-    pub mail_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "sms_uuid")]
-    pub sms_uuid: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "recipient_phone")]
-    pub recipient_phone: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "message_id")]
-    pub message_id: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "mail_id")]
+    pub mail_id: Option<Option<Uuid>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "sms_uuid")]
+    pub sms_uuid: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "recipient_phone")]
+    pub recipient_phone: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "message_id")]
+    pub message_id: Option<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "trace_status")]
     pub trace_status: Option<TraceStatus>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "failure_type")]
-    pub failure_type: Option<TraceFailureType>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "failure_reason")]
-    pub failure_reason: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "sent_datetime")]
-    pub sent_datetime: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "open_datetime")]
-    pub open_datetime: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "reply_datetime")]
-    pub reply_datetime: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "links_click_datetime")]
-    pub links_click_datetime: Option<DateTime<Utc>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "failure_type")]
+    pub failure_type: Option<Option<TraceFailureType>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "failure_reason")]
+    pub failure_reason: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "sent_datetime")]
+    pub sent_datetime: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "open_datetime")]
+    pub open_datetime: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "reply_datetime")]
+    pub reply_datetime: Option<Option<DateTime<Utc>>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "links_click_datetime")]
+    pub links_click_datetime: Option<Option<DateTime<Utc>>>,
 }
 
 impl PatchMailingTraceDto {
@@ -416,12 +420,4 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingTraceDto> for MailingTrace {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to MailingTrace here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 

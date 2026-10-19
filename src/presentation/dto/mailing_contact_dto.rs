@@ -84,21 +84,21 @@ pub struct UpdateMailingContactDto {
 #[cfg_attr(feature = "openapi", derive(ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct PatchMailingContactDto {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "first_name")]
-    pub first_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "last_name")]
-    pub last_name: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option")]
+    pub name: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "first_name")]
+    pub first_name: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "last_name")]
+    pub last_name: Option<Option<String>>,
     #[cfg_attr(feature = "openapi", schema(example = "example"))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "company_name")]
-    pub company_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", alias = "country_code")]
-    pub country_code: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub phone: Option<String>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "company_name")]
+    pub company_name: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option", alias = "country_code")]
+    pub country_code: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::presentation::dto::double_option")]
+    pub phone: Option<Option<String>>,
 }
 
 impl PatchMailingContactDto {
@@ -276,12 +276,4 @@ impl backbone_core::ApplyUpdateDto<UpdateMailingContactDto> for MailingContact {
         Ok(self)
     }
 }
-
-// =============================================================================
-// Custom DTOs
-// =============================================================================
-
-// Add custom DTOs specific to MailingContact here.
-// This section will be preserved during regeneration.
-// >>> END CUSTOM DTOs
 
